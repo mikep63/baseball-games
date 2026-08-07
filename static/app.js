@@ -199,14 +199,25 @@ function battingTable(all) {
   // Slot 0 is a man who never entered the batting order -- since the DH, the
   // pitchers. A box score lists them under Pitching, not among the batters.
   const rows = all.filter(b => b.slot == null || b.slot > 0);
-  const body = rows.map(b => ({
-    cells: [
-      playerLink(b.person, b.name)
+  // A box score indents anyone who came into a lineup place someone else
+  // started in. The rows arrive in slot-then-sequence order, so the first
+  // appearance of a slot is the starter and everything after it is a
+  // replacement -- no need to carry the sequence number to know that.
+  const started = new Set();
+  const body = rows.map(b => {
+    const replacement = b.slot != null && started.has(b.slot);
+    if (b.slot != null) started.add(b.slot);
+    const label = playerLink(b.person, b.name)
       + (b.positions.length ? ` <span class="note">${esc(b.positions.join('-').toLowerCase())}</span>` : '')
-      + (b.pinchHitInning ? ` <span class="pill quiet">PH ${b.pinchHitInning}</span>` : ''),
+      + (b.pinchHitInning ? ` <span class="pill quiet" title="Pinch-hit in the ${
+           b.pinchHitInning} inning">PH ${b.pinchHitInning}</span>` : '')
+      + (b.pinchRunInning ? ` <span class="pill quiet" title="Pinch-ran in the ${
+           b.pinchRunInning} inning">PR ${b.pinchRunInning}</span>` : '');
+    return { cells: [
+      replacement ? `<span class="sub">${label}</span>` : label,
       n(b.ab), n(b.r), n(b.h), n(b.rbi), n(b.bb), n(b.so),
-    ],
-  }));
+    ] };
+  });
   const sum = k => rows.reduce((a, b) => a + (b[k] || 0), 0);
   if (rows.length) {
     body.push({
@@ -448,24 +459,60 @@ async function viewPlayer(parts, q) {
     '<p class="note">Pick a season to see every game he played in it.</p>';
 }
 
+/* One table per way he took part. A hitter's log has no business carrying
+   empty IP and ER columns, and a two-way player -- Ruth in 1918, Ohtani now --
+   gets both, each with the stats that belong to it, rather than one wide row
+   half of which is blank. */
 async function renderGameLog(id, season) {
   const d = await api(`/player/${id}/games?season=${season}`);
-  const rows = d.games.map(g => ({
-    cells: [
-      gameLink(g.id, niceDate(g.date)),
-      teamLink(g.team, g.season, g.teamName),
-      (g.side === 0 ? 'at ' : 'vs ') + esc(g.oppName),
-      `${n(g.vis_score)}–${n(g.home_score)}`,
-      n(g.ab), n(g.r), n(g.h), n(g.hr), n(g.rbi), n(g.bb), n(g.so),
-      g.ip ?? '', n(g.p_h), n(g.p_er), n(g.p_so),
-    ],
+  const common = g => [
+    gameLink(g.id, niceDate(g.date)),
+    teamLink(g.team, g.season, g.teamName),
+    (g.side === 0 ? 'at ' : 'vs ') + esc(g.oppName),
+    `${n(g.vis_score)}–${n(g.home_score)}`,
+  ];
+  const HEAD = [{ t: 'Date', l: 1 }, { t: 'Team', l: 1 },
+                { t: 'Opponent', l: 1 }, { t: 'Score' }];
+
+  const batted = d.games.filter(g => g.ab != null);
+  const pitched = d.games.filter(g => g.p_outs != null);
+
+  const batTotal = k => batted.reduce((a, g) => a + (g[k] || 0), 0);
+  const batRows = batted.map(g => ({
+    cells: [...common(g), n(g.ab), n(g.r), n(g.h), n(g.d), n(g.t), n(g.hr),
+      n(g.rbi), n(g.bb), n(g.so), n(g.sb)],
   }));
-  document.getElementById('gamelog').innerHTML =
-    `<p class="note">${d.total} games in ${season}.</p>` + table(
-      [{ t: 'Date', l: 1 }, { t: 'Team', l: 1 }, { t: 'Opponent', l: 1 }, { t: 'Score' },
-       { t: 'AB' }, { t: 'R' }, { t: 'H' }, { t: 'HR' }, { t: 'RBI' }, { t: 'BB' },
-       { t: 'SO' }, { t: 'IP' }, { t: 'H' }, { t: 'ER' }, { t: 'SO' }], rows,
-      { empty: 'No games that season.' });
+  if (batRows.length) {
+    batRows.push({ _cls: 'totals', cells: [`${batted.length} games`, '', '', '',
+      batTotal('ab'), batTotal('r'), batTotal('h'), batTotal('d'), batTotal('t'),
+      batTotal('hr'), batTotal('rbi'), batTotal('bb'), batTotal('so'), batTotal('sb')] });
+  }
+
+  const pitTotal = k => pitched.reduce((a, g) => a + (g[k] || 0), 0);
+  const pitRows = pitched.map(g => ({
+    cells: [...common(g), g.ip ?? '', n(g.p_h), n(g.p_r), n(g.p_er), n(g.p_bb),
+      n(g.p_so), n(g.p_hr)],
+  }));
+  if (pitRows.length) {
+    pitRows.push({ _cls: 'totals', cells: [`${pitched.length} games`, '', '', '',
+      ip(pitTotal('p_outs')), pitTotal('p_h'), pitTotal('p_r'), pitTotal('p_er'),
+      pitTotal('p_bb'), pitTotal('p_so'), pitTotal('p_hr')] });
+  }
+
+  const parts = [];
+  if (batRows.length) {
+    parts.push((pitRows.length ? '<h4>Batting</h4>' : '') + table(
+      [...HEAD, { t: 'AB' }, { t: 'R' }, { t: 'H' }, { t: '2B' }, { t: '3B' },
+       { t: 'HR' }, { t: 'RBI' }, { t: 'BB' }, { t: 'SO' }, { t: 'SB' }], batRows));
+  }
+  if (pitRows.length) {
+    parts.push((batRows.length ? '<h4>Pitching</h4>' : '') + table(
+      [...HEAD, { t: 'IP' }, { t: 'H' }, { t: 'R' }, { t: 'ER' }, { t: 'BB' },
+       { t: 'SO' }, { t: 'HR' }], pitRows));
+  }
+  document.getElementById('gamelog').innerHTML = parts.length
+    ? `<p class="note">${d.total} games in ${season}.</p>` + parts.join('')
+    : '<p class="empty">No games that season.</p>';
 }
 
 // --------------------------------------------------------------------- team

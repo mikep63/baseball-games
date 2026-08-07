@@ -214,6 +214,8 @@ def export_season(conn, season):
         "AND (sh > 0 OR sf > 0 OR hbp > 0 OR cs > 0 OR gidp > 0)" % q, ids)]
     ph = [[idx[r[0]], r[1], r[2]] for r in conn.execute(
         "SELECT game, person, inning FROM pinch_hit WHERE game IN (%s)" % q, ids)]
+    pr = [[idx[r[0]], r[1], r[2]] for r in conn.execute(
+        "SELECT game, person, inning FROM pinch_run WHERE game IN (%s)" % q, ids)]
     bev = [[idx[r[0]]] + list(r[1:]) for r in conn.execute(
         "SELECT game, kind, side, players, inning, runners_on, outs "
         "FROM box_event WHERE game IN (%s) ORDER BY game, kind" % q, ids)]
@@ -231,6 +233,7 @@ def export_season(conn, season):
         "pitC": ["g"] + cols(PIT_COLS), "pit": pit,
         "batxC": ["g", "person", "sh", "sf", "hbp", "cs", "gidp"], "batx": batx,
         "phC": ["g", "person", "inning"], "ph": ph,
+        "prC": ["g", "person", "inning"], "pr": pr,
         "bevC": ["g", "kind", "side", "players", "inning", "on", "outs"], "bev": bev,
         "tboxC": ["g", "side", "lob"], "tbox": tbox,
         "rosC": ["team", "person", "pos", "bats", "throws"], "ros": roster})

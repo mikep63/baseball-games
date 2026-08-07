@@ -112,6 +112,7 @@ window.LocalAPI = (function () {
         const bat = rows(s, 'batC', 'bat'); deref(bat, 'g');
         const pit = rows(s, 'pitC', 'pit'); deref(pit, 'g');
         const ph = rows(s, 'phC', 'ph'); deref(ph, 'g');
+        const pr = rows(s, 'prC', 'pr'); deref(pr, 'g');
         // sparse extras: absent means zero, not unknown
         const batx = rows(s, 'batxC', 'batx'); deref(batx, 'g');
         const xBy = new Map(batx.map(x => [x.game + '|' + x.person, x]));
@@ -129,7 +130,8 @@ window.LocalAPI = (function () {
           return m;
         };
         return { games, byId, bat: group(bat), pit: group(pit),
-                 ph: group(ph), bev: group(bev), tbox: group(tbox), ros,
+                 ph: group(ph), pr: group(pr), bev: group(bev),
+                 tbox: group(tbox), ros,
                  allBat: bat, allPit: pit };
       })());
     }
@@ -218,12 +220,14 @@ window.LocalAPI = (function () {
     const M = await meta();
 
     const phBy = new Map((s.ph.get(gid) || []).map(x => [x.person, x.inning]));
+    const prBy = new Map((s.pr.get(gid) || []).map(x => [x.person, x.inning]));
 
     const last = id => (pe.get(id) || {}).last || null;
     const batting = (s.bat.get(gid) || []).map(b => Object.assign({}, b, {
       name: nameOf(pe.get(b.person)), lastName: last(b.person),
       positions: b.pos ? String(b.pos).split('-').map(x => POSITIONS[x] || x) : [],
       pinchHitInning: phBy.get(b.person) ?? null,
+      pinchRunInning: prBy.get(b.person) ?? null,
     }));
     const pitching = (s.pit.get(gid) || []).map(p => Object.assign({}, p, {
       name: nameOf(pe.get(p.person)), lastName: last(p.person),
@@ -301,8 +305,9 @@ window.LocalAPI = (function () {
         d: e.bat?.d ?? null, t: e.bat?.t ?? null, hr: e.bat?.hr ?? null,
         rbi: e.bat?.rbi ?? null, bb: e.bat?.bb ?? null, so: e.bat?.so ?? null,
         sb: e.bat?.sb ?? null,
-        p_h: e.pit?.h ?? null, p_er: e.pit?.er ?? null,
-        p_bb: e.pit?.bb ?? null, p_so: e.pit?.so ?? null,
+        p_h: e.pit?.h ?? null, p_r: e.pit?.r ?? null, p_er: e.pit?.er ?? null,
+        p_bb: e.pit?.bb ?? null, p_so: e.pit?.so ?? null, p_hr: e.pit?.hr ?? null,
+        p_outs: e.pit?.outs ?? null,
         ip: e.pit && e.pit.outs != null
           ? Math.floor(e.pit.outs / 3) + '.' + (e.pit.outs % 3) : null,
       });

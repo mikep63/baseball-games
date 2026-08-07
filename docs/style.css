@@ -91,6 +91,10 @@ td.num { font-variant-numeric: tabular-nums; }
 .pill.alt { background: var(--accent); }
 .pill.quiet { background: #cfcabb; color: #4a463d; }
 
+/* A man who came into a place someone else started in, indented the way a
+   box score indents him. */
+.sub { display: inline-block; padding-left: 1.4rem; }
+
 .result-W { color: var(--green); font-weight: bold; }
 .result-L { color: var(--accent); }
 
@@ -121,3 +125,5 @@ footer p { margin-bottom: .5rem; }
   .meta-grid { grid-template-columns: 1fr; }
   .two-col { grid-template-columns: 1fr; }
 }
+
+h4 { font-size: .95rem; margin: .9rem 0 .3rem; color: var(--green); }

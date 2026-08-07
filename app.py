@@ -216,10 +216,15 @@ def api_game(gid, conn):
     tnames = team_map(conn, [(g["vis"], season), (g["home"], season)])
     park = one(conn.execute("SELECT * FROM park WHERE id = ?", (g["park"],)))
 
+    # Scalar subqueries rather than joins: a man with two pinch-hit records in
+    # one game would otherwise be given two batting lines.
     batting = rows(conn.execute("""
-        SELECT b.*, ph.inning AS ph_inning FROM bat b
-        LEFT JOIN pinch_hit ph ON ph.game = b.game AND ph.person = b.person
-        WHERE b.game = ? ORDER BY b.side, b.slot, b.seq""", (gid,)))
+        SELECT b.*,
+               (SELECT MIN(inning) FROM pinch_hit ph
+                 WHERE ph.game = b.game AND ph.person = b.person) AS ph_inning,
+               (SELECT MIN(inning) FROM pinch_run pr
+                 WHERE pr.game = b.game AND pr.person = b.person) AS pr_inning
+        FROM bat b WHERE b.game = ? ORDER BY b.side, b.slot, b.seq""", (gid,)))
     pitching = rows(conn.execute(
         "SELECT * FROM pit WHERE game = ? ORDER BY side, seq", (gid,)))
     fielding = rows(conn.execute(
@@ -251,6 +256,7 @@ def api_game(gid, conn):
         b["lastName"] = lasts.get(b["person"])
         b["positions"] = pos_by_person.get((b["side"], b["person"]), [])
         b["pinchHitInning"] = b.pop("ph_inning", None)
+        b["pinchRunInning"] = b.pop("pr_inning", None)
     for p in pitching:
         p["name"] = names.get(p["person"])
         p["lastName"] = lasts.get(p["person"])
@@ -343,7 +349,8 @@ def api_player_games(pid, q, conn):
         SELECT g.id, g.date, g.season, g.gametype, g.vis, g.home,
                g.vis_score, g.home_score, g.park,
                b.ab, b.r, b.h, b.d, b.t, b.hr, b.rbi, b.bb, b.so, b.sb,
-               p.outs p_outs, p.h p_h, p.er p_er, p.bb p_bb, p.so p_so,
+               p.outs p_outs, p.h p_h, p.r p_r, p.er p_er, p.bb p_bb,
+               p.so p_so, p.hr p_hr,
                CASE x.side WHEN 0 THEN g.vis ELSE g.home END team,
                CASE x.side WHEN 0 THEN g.home ELSE g.vis END opp,
                x.side
