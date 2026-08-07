@@ -132,8 +132,13 @@ async function viewGames(_, q) {
       n(g.home_score),
       g.parkName ? link('#/park/' + g.park, g.parkName) : '',
       g.attendance ? g.attendance.toLocaleString() : '',
-      (g.has_box ? '<span class="pill quiet">box</span>' : '')
-      + (g.has_pbp ? '<span class="pill">plays</span>' : ''),
+      // What Retrosheet holds for this game, not something to click. Both are
+      // quiet for that reason: a filled pill reads as a button, and the
+      // play-by-play isn't a view yet.
+      (g.has_box ? '<span class="pill quiet" title="Retrosheet has a full box'
+        + ' score for this game">box</span>' : '')
+      + (g.has_pbp ? '<span class="pill quiet" title="Retrosheet has a'
+        + ' pitch-by-pitch account of this game. Not shown here yet.">plays</span>' : ''),
     ],
   }));
 
@@ -150,7 +155,7 @@ async function viewGames(_, q) {
       ? `Showing the first ${data.shown.toLocaleString()}.` : ''}</p>
     ${table([{ t: 'Date', l: 1 }, { t: 'Visitor', l: 1 }, { t: 'R' },
              { t: 'Home', l: 1 }, { t: 'R' }, { t: 'Park', l: 1 },
-             { t: 'Attendance' }, { t: '', l: 1 }], rows,
+             { t: 'Attendance' }, { t: 'On file', l: 1 }], rows,
             { empty: 'No games match those filters.' })}`;
 
   const go = () => {
@@ -271,7 +276,11 @@ async function viewGame(parts) {
         &nbsp;at&nbsp;
         <span class="${g.home_score > g.vis_score ? 'win' : ''}">${esc(g.homeName)} ${n(g.home_score)}</span>
       </div>
-      <div>${esc(g.gametypeLabel)}${g.has_pbp ? '<span class="pill">play-by-play</span>' : ''}</div>
+      <div>${esc(g.gametypeLabel)}${g.has_pbp
+        ? '<span class="pill quiet" title="Retrosheet has a pitch-by-pitch'
+          + ' account of this game. This app doesn\'t show it yet.">'
+          + 'play-by-play on file</span>'
+        : ''}</div>
     </div>
     <p class="note">${niceDate(g.date)}${g.number !== '0' ? ` — game ${g.number} of a doubleheader` : ''}</p>
     ${lineScoreHTML(g)}
@@ -515,6 +524,11 @@ async function viewAbout() {
       games, ${META.firstSeason}–${META.lastSeason};
       ${META.withBox.toLocaleString()} of them with a full box score and
       ${META.withPlays.toLocaleString()} with play-by-play.</p>
+    <p class="note"><strong>The play-by-play is not shown here yet.</strong> Where a
+      game is marked <span class="pill quiet">plays</span>, Retrosheet holds a
+      pitch-by-pitch account of it — 18 million plays in all — but this app reads
+      the game and box-score layers only. The badge says what exists, not what
+      you can open.</p>
 
     <h3>What the data can and can't say</h3>
     <p class="note">Game results go back to 1871, but the nineteenth-century game
