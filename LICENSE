@@ -5,9 +5,8 @@ the baseball data it reads.
 1. THE SOFTWARE  —  MIT License
 ================================================================================
 
-Applies to the code in this repository: app.py, build_db.py, build_site.py,
-update_data.py, franchises.py, and everything under static/ except the data
-files described in section 2.
+Applies to the code in this repository: app.py, build_db.py, update_data.py,
+test_views.js, and everything under static/.
 
 Copyright (c) 2026 Mike Parker
 
@@ -30,46 +29,56 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
-2. THE DATA  —  Creative Commons Attribution-ShareAlike 3.0 Unported
+2. THE DATA  —  Retrosheet
 ================================================================================
 
-Applies to the Retrosheet data as distributed in data/csv/ and
-data/readme2025.txt, and to everything derived from it in this repository,
-including all files under docs/data/.
+Applies to the Retrosheet files fetched into data/retrosheet/ and to everything
+derived from them, including retro.sqlite and the JSON in fixtures/.
 
-    The Retrosheet data is copyright 1996-2025 by SABR (Society for
-    American Baseball Research), via generous donation from Sean Lahman.
+    The information used here was obtained free of charge from and is
+    copyrighted by Retrosheet. Interested parties may contact Retrosheet at
+    "www.retrosheet.org".
 
-    Licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported
-    License: https://creativecommons.org/licenses/by-sa/3.0/
+That notice is Retrosheet's one condition, and it must appear prominently in
+anything built on this data. It is carried in the page footer and on the About
+page for that reason, not as decoration. Do not remove it.
 
-    Database home: https://sabr.org/lahman-database/
-    Licensing contact: Scott Bush, sbush@sabr.org
+Retrosheet's terms are otherwise unusually permissive, and notably more so than
+the CC BY-SA 3.0 that governs the Lahman database used by the sibling
+baseball-records repository. Recipients are free to make any desired use of the
+information, including selling it, giving it away, or producing a commercial
+product based upon it. There is no share-alike obligation, so the MIT grant in
+section 1 stands on its own and derived work need not be relicensed.
 
-The MIT grant in section 1 does NOT apply to these files. They remain under
-CC BY-SA 3.0, and so does anything you derive from them.
+Accuracy
+--------
+Retrosheet makes no guarantees of accuracy. From their notice:
 
-Changes made to the original database
--------------------------------------
-The files in docs/data/ are modified derivatives, not verbatim copies:
+    Much effort is expended to make our website as correct as possible, but
+    Retrosheet shall not be held responsible for any consequences arising from
+    the use of the material presented here. All information is subject to
+    corrections as additional data are received. We are grateful to anyone who
+    discovers discrepancies and we appreciate learning of the details.
 
-  * Column subsets — each export carries only the columns the app reads.
-  * A derived careerG column added to people.csv, summed from Appearances.
-  * franchises.csv and franchise_eras.csv are new tables with no counterpart
-    in the original, reconstructing each franchise's renames and relocations
-    from the per-season Teams rows (see franchises.py).
-  * hof.csv contains only inducted members.
-  * Line endings normalised to LF.
+This matters more here than it would for a season-totals database. Retrosheet
+ships no season or career totals of its own; every total this app shows is
+summed from individual game lines, and Retrosheet itself documents where its
+box scores differ from the official record (see the discrepancies/ folder of
+the distribution). Numbers here will therefore disagree with other sources in
+places. The About page says so.
 
-The source CSVs in data/csv/ are unmodified as distributed by SABR.
+Changes made to the original data
+---------------------------------
+retro.sqlite is a modified derivative, not a verbatim copy:
 
-Note on redistribution
-----------------------
-CC BY-SA 3.0 section 4(a) restricts imposing technological measures that would
-prevent recipients from exercising the rights it grants. If you redistribute
-this data inside a DRM-protected package such as an App Store binary, keep the
-dataset separately obtainable under its license. This repository and its
-GitHub Pages build already serve that purpose.
+  * Negative stat values, which Retrosheet uses to mean "not recorded", are
+    stored as NULL so that summing does not subtract them.
+  * Pinch-hit records are kept in a separate table from batting lines, because
+    they annotate rather than add to them.
+  * Kansas City Athletics game-log rows for 1955-1967 are recoded from OAK to
+    KC1, matching every other file in the distribution.
+  * Line scores are normalised to one comma-separated form.
+  * Headers for Negro League games, which the game logs do not cover, are
+    synthesised from the box-score files.
 
-This note is a pointer, not legal advice. For anything commercial, contact
-SABR at the address above.
+The files in data/retrosheet/ are unmodified as distributed by Retrosheet.
