@@ -449,6 +449,13 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+    def end_headers(self):
+        # A development server that lets the browser cache app.js and style.css
+        # spends its life showing you the previous edit. Nothing here is served
+        # to the public, so there is nothing to trade away by refusing to cache.
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        super().end_headers()
+
     def send_json(self, obj, code=200):
         body = json.dumps(obj, default=str).encode("utf-8")
         self.send_response(code)

@@ -175,10 +175,11 @@ function lineScoreHTML(g) {
     `<tr><td class="team">${esc(name)}</td>`
     + Array.from({ length: innings }, (_, i) => `<td>${esc(line[i] ?? '')}</td>`).join('')
     + `<td class="rhe">${n(r)}</td><td class="rhe">${n(hits)}</td><td class="rhe">${n(errs)}</td></tr>`;
-  return `<div class="linescore"><table><thead><tr>${head.join('')}</tr></thead><tbody>
+  return `<div class="linescore-wrap"><div class="linescore"><table>
+    <thead><tr>${head.join('')}</tr></thead><tbody>
     ${row(g.visName, g.vis, v, g.vis_score, g.v_h, g.v_e)}
     ${row(g.homeName, g.home, h, g.home_score, g.h_h, g.h_e)}
-  </tbody></table></div>`;
+  </tbody></table></div></div>`;
 }
 
 function battingTable(rows, season) {
@@ -258,7 +259,7 @@ async function viewGame(parts) {
 
   app.innerHTML = `
     <div class="crumb">${link('#/games?season=' + g.season, g.season + ' games')}
-      · ${link('#/day/' + g.date, niceDate(g.date))}</div>
+      · ${link('#/day/' + g.date, 'every game that day')}</div>
     <div class="gamehead">
       <div class="score">
         <span class="${g.vis_score > g.home_score ? 'win' : ''}">${esc(g.visName)} ${n(g.vis_score)}</span>
@@ -292,7 +293,8 @@ async function viewPlayer(parts, q) {
     p.weight ? p.weight + ' lb' : ''].filter(Boolean).join(', '));
   add('Debut', p.play_debut ? niceDate(p.play_debut) : '');
   add('Last game', p.play_last ? niceDate(p.play_last) : '');
-  if (p.hof) add('Hall of Fame', esc(p.hof));
+  // Hall of Fame membership is the pill next to his name; a row saying
+  // "Hall of Fame: HOF" repeats it without adding anything.
 
   const reg = r => r.gametype === 'regular';
   const batRows = d.batting.filter(reg).map(r => ({

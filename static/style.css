@@ -20,8 +20,11 @@ body {
   line-height: 1.45;
 }
 
-header { background: var(--green); color: #f5f1e6; padding: 1.2rem 1.5rem 0; }
-header .bar { max-width: 1100px; margin: 0 auto; }
+/* The padding lives on .bar, not on header, so that .bar's content box lines
+   up with main's: both are a 1100px box with 1.5rem inside it. Padding the
+   header instead leaves the nav 24px to the left of every table on the page. */
+header { background: var(--green); color: #f5f1e6; padding: 1.2rem 0 0; }
+header .bar { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 header h1 { font-size: 1.6rem; letter-spacing: .02em; }
 header h1 a { color: inherit; text-decoration: none; }
 header .sub { color: #c9d6c5; font-size: .85rem; margin-top: .15rem; }
@@ -65,8 +68,11 @@ tbody tr:hover { background: #eaf0e4; }
 tr.totals td { border-top: 2px solid var(--green); font-weight: bold; background: #eef2e6; }
 td.num { font-variant-numeric: tabular-nums; }
 
-/* line score */
-.linescore { display: inline-block; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; margin-bottom: 1rem; }
+/* line score. The wrapper is what scrolls: an extra-innings game is 20-odd
+   columns wide and would otherwise push the whole page sideways on a phone,
+   taking the meta grid and every table with it. */
+.linescore-wrap { overflow-x: auto; max-width: 100%; margin-bottom: 1rem; }
+.linescore { display: inline-block; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
 .linescore table { width: auto; }
 .linescore td, .linescore th { padding: .3rem .5rem; text-align: center; min-width: 1.7rem; }
 .linescore td.team { text-align: left; padding-right: 1.2rem; font-weight: bold; }
@@ -100,6 +106,12 @@ footer p { margin-bottom: .5rem; }
 
 @media (max-width: 600px) {
   main { padding: 1rem .75rem 2rem; }
-  header { padding: 1rem .75rem 0; }
+  header { padding: 1rem 0 0; }
+  header .bar { padding: 0 .75rem; }
+  footer { padding: 0 .75rem 2rem; }
   table { font-size: .82rem; }
+  .gamehead { gap: .35rem; }
+  .gamehead .score { font-size: 1.15rem; }
+  .meta-grid { grid-template-columns: 1fr; }
+  .two-col { grid-template-columns: 1fr; }
 }
