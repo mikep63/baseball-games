@@ -1,0 +1,11 @@
+# The Retrosheet source files. ~2.1 GB unpacked, fetched by update_data.py,
+# and identical for everyone — there is nothing to be gained by versioning it.
+data/
+
+# The built database. ~1.6 GB, entirely derived from data/, and rebuilt from
+# scratch by build_db.py in under two minutes.
+retro.sqlite
+
+.DS_Store
+__pycache__/
+*.pyc

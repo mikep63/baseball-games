@@ -1,0 +1,75 @@
+This repository contains two separately licensed things: the software, and
+the baseball data it reads.
+
+================================================================================
+1. THE SOFTWARE  —  MIT License
+================================================================================
+
+Applies to the code in this repository: app.py, build_db.py, build_site.py,
+update_data.py, franchises.py, and everything under static/ except the data
+files described in section 2.
+
+Copyright (c) 2026 Mike Parker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+2. THE DATA  —  Creative Commons Attribution-ShareAlike 3.0 Unported
+================================================================================
+
+Applies to the Retrosheet data as distributed in data/csv/ and
+data/readme2025.txt, and to everything derived from it in this repository,
+including all files under docs/data/.
+
+    The Retrosheet data is copyright 1996-2025 by SABR (Society for
+    American Baseball Research), via generous donation from Sean Lahman.
+
+    Licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported
+    License: https://creativecommons.org/licenses/by-sa/3.0/
+
+    Database home: https://sabr.org/lahman-database/
+    Licensing contact: Scott Bush, sbush@sabr.org
+
+The MIT grant in section 1 does NOT apply to these files. They remain under
+CC BY-SA 3.0, and so does anything you derive from them.
+
+Changes made to the original database
+-------------------------------------
+The files in docs/data/ are modified derivatives, not verbatim copies:
+
+  * Column subsets — each export carries only the columns the app reads.
+  * A derived careerG column added to people.csv, summed from Appearances.
+  * franchises.csv and franchise_eras.csv are new tables with no counterpart
+    in the original, reconstructing each franchise's renames and relocations
+    from the per-season Teams rows (see franchises.py).
+  * hof.csv contains only inducted members.
+  * Line endings normalised to LF.
+
+The source CSVs in data/csv/ are unmodified as distributed by SABR.
+
+Note on redistribution
+----------------------
+CC BY-SA 3.0 section 4(a) restricts imposing technological measures that would
+prevent recipients from exercising the rights it grants. If you redistribute
+this data inside a DRM-protected package such as an App Store binary, keep the
+dataset separately obtainable under its license. This repository and its
+GitHub Pages build already serve that purpose.
+
+This note is a pointer, not legal advice. For anything commercial, contact
+SABR at the address above.
