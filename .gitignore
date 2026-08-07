@@ -1,6 +1,10 @@
 # The Retrosheet source files. ~2.1 GB unpacked, fetched by update_data.py,
 # and identical for everyone — there is nothing to be gained by versioning it.
-data/
+#
+# Anchored with a leading slash on purpose. Unanchored, "data/" matches a
+# directory of that name at any depth, which silently swallows docs/data —
+# the entire exported dataset the Pages build serves.
+/data/
 
 # The built database. ~1.6 GB, entirely derived from data/, and rebuilt from
 # scratch by build_db.py in under two minutes.

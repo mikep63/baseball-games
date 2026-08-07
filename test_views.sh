@@ -39,3 +39,14 @@ done
 echo "Recorded $(ls fixtures/*.json | wc -l | tr -d ' ') fixtures"
 
 "$JSC" test_views.js
+
+# The docs/ build reimplements every endpoint in the browser. Nothing but this
+# stops it drifting from app.py, so run it whenever the exports exist.
+if [ -d docs/data ]; then
+  echo
+  "$JSC" test_local_api.js
+else
+  echo
+  echo "docs/ not built — skipping the local-API agreement check."
+  echo "Run build_site.py first to include it."
+fi

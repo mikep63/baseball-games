@@ -187,7 +187,7 @@ def api_games(q, conn):
         where.append("g.gametype = ?"); params.append(arg(q, "gametype"))
     limit = min(intarg(q, "limit", 200), 1000)
     sql = GAME_LIST_SQL + "".join(" AND " + w for w in where) + \
-        " ORDER BY g.date, g.number LIMIT ?"
+        " ORDER BY g.date, g.number, g.id LIMIT ?"
     gs = rows(conn.execute(sql, params + [limit]))
     total = one(conn.execute("SELECT COUNT(*) n FROM game g WHERE 1=1"
                              + "".join(" AND " + w for w in where), params))["n"]
@@ -415,7 +415,7 @@ def api_park(park_id, conn):
                                SUM(attendance) att FROM game WHERE park = ?""",
                             (park_id,)))
     by_season = rows(conn.execute("""SELECT season, COUNT(*) n,
-                                     AVG(attendance) avg_att FROM game
+                                     CAST(AVG(attendance) AS INT) avg_att FROM game
                                      WHERE park = ? GROUP BY season ORDER BY season""",
                                   (park_id,)))
     return {"park": p, "span": span, "bySeason": by_season}

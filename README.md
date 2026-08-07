@@ -34,6 +34,29 @@ respectively, both entirely derived, both one command away.
 | **Team** | a club's season: schedule, running record, roster |
 | **Park** | where it was, what was played there, attendance by season |
 
+## GitHub Pages
+
+`docs/` is a self-contained build of the same app with no server: `api-local.js`
+reimplements every endpoint in the browser over exported JSON, so `app.js` runs
+unchanged and there is one frontend rather than two.
+
+```sh
+python3 build_site.py                      # writes docs/
+python3 -m http.server -d docs 8001        # preview
+```
+
+Then **Settings → Pages → Deploy from a branch → `main`, folder `/docs`**.
+
+The exports are columnar — one shared list of column names, then rows as bare
+arrays — and sharded by season, because that is how the app is used. A visitor
+looking at 1927 downloads one 1.6 MB file, not the corpus. Careers are sharded
+on the player's initial for the same reason: one file is 18 MB and every player
+page would pay for it.
+
+`docs/` is about 455 MB and **is committed**, which is the cost of serverless
+hosting. Most shards are byte-identical between releases, so the yearly growth
+is the seasons that actually changed rather than another full copy.
+
 ## Layout
 
 | | |
@@ -41,8 +64,9 @@ respectively, both entirely derived, both one command away.
 | `update_data.py` | fetch and verify a Retrosheet release |
 | `build_db.py` | parse it into `retro.sqlite` |
 | `app.py` | the server and the JSON API — **the reference implementation** |
-| `static/` | the frontend: `index.html`, `app.js`, `style.css` |
-| `test_views.sh` | re-record fixtures, then render every view in JavaScriptCore |
+| `build_site.py` | export `docs/` for Pages |
+| `static/` | the frontend: `index.html`, `app.js`, `style.css`, `api-local.js` |
+| `test_views.sh` | re-record fixtures, render every view, check both backends agree |
 
 ## What the data can and can't say
 
@@ -105,6 +129,15 @@ database and no server:
 
 Use that while working on `static/`; use `test_views.sh` after touching
 `app.py`, because only that re-records what the views are tested against.
+
+`test_local_api.js` is the other half, and the more important one: there are
+two implementations of every endpoint — Python over SQLite, and JavaScript over
+the exported JSON — and nothing but this enforces that they answer the same.
+It runs `api-local.js` against the real `docs/data` exports and compares 1,847
+fields against the responses recorded from `app.py`. It has already caught four
+silent disagreements: a roster sorted by given name rather than surname, an
+unstable tie-break in the game list, attendance rounded on one side only, and
+NULL leagues sorting last instead of first.
 
 The build itself is checked by reconciling the box scores against the game
 logs, which are independent sources for the same games: summed batting lines

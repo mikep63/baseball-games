@@ -410,6 +410,7 @@ def load_boxes(conn, known):
     rest instead of existing only as orphaned stat lines.
     """
     bat, ph, run, pit, fld, tbox, bev, headers = [], [], [], [], [], [], [], []
+    weather = []
     seen, synth = set(), 0
     total = {"bat": 0, "ph": 0, "run": 0, "pit": 0, "fld": 0, "tbox": 0, "bev": 0}
 
@@ -440,8 +441,11 @@ def load_boxes(conn, known):
                 p = raw.rstrip("\n").split(",")
                 t = p[0]
                 if t == "id":
-                    if gid and gid not in known:
-                        headers.append(_synth_header(gid, info, lines, kind))
+                    if gid:
+                        if gid not in known:
+                            headers.append(_synth_header(gid, info, lines, kind))
+                        else:
+                            weather.append(_weather(gid, info))
                     gid, info, lines = p[1], {}, {}
                     seen.add(gid)
                 elif t == "info" and len(p) >= 3:
@@ -480,8 +484,11 @@ def load_boxes(conn, known):
                     else:
                         bev.append((gid, k, side, ",".join(x for x in p[3:] if x),
                                     None, None, None))
-            if gid and gid not in known:
-                headers.append(_synth_header(gid, info, lines, kind))
+            if gid:
+                if gid not in known:
+                    headers.append(_synth_header(gid, info, lines, kind))
+                else:
+                    weather.append(_weather(gid, info))
             flush()
 
     synth = len(headers)
@@ -501,7 +508,40 @@ def load_boxes(conn, known):
     say("team box line", total["tbox"])
     say("box event", total["bev"])
     say("game (from boxes)", synth, "headers the logs don't carry")
+
+    # Weather, sky, wind and first pitch are in the box files and in nothing
+    # else -- the game logs have no column for any of them. Without this the
+    # game page's Weather line is empty for every game that has a game-log
+    # header, which is all but the Negro Leagues.
+    weather = [w for w in weather if any(v is not None for v in w[:-1])]
+    conn.executemany("""UPDATE game SET temp = COALESCE(temp, ?),
+                        sky = COALESCE(sky, ?), precip = COALESCE(precip, ?),
+                        field_cond = COALESCE(field_cond, ?),
+                        wind_dir = COALESCE(wind_dir, ?),
+                        wind_speed = COALESCE(wind_speed, ?),
+                        start_time = COALESCE(start_time, ?)
+                        WHERE id = ?""", weather)
+    say("weather backfilled", len(weather), "from the box files")
     return seen
+
+
+UNKNOWN = {"unknown", "none", "", "0:00pm", "(none)"}
+
+
+def _weather(gid, info):
+    """Conditions for a game whose header came from the game log.
+
+    Retrosheet spells "we don't know" several ways depending on the field --
+    the string "unknown", a zero temperature, a wind speed of -1 -- and all of
+    them render as data if taken literally. A 0F first pitch in July is not a
+    cold snap, it is a blank.
+    """
+    def word(k):
+        v = (info.get(k) or "").strip()
+        return None if v.lower() in UNKNOWN else v
+    temp = stat(info.get("temp"))
+    return (temp or None, word("sky"), word("precip"), word("fieldcond"),
+            word("winddir"), stat(info.get("windspeed")), word("starttime"), gid)
 
 
 def _synth_header(gid, info, lines, kind):
