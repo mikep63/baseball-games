@@ -96,6 +96,16 @@ Re-records the API fixtures from a live `app.py`, then renders every view in
 JavaScriptCore (which ships with macOS) and checks the markup. Re-recording is
 the point — a fixture that has drifted from what `app.py` returns tests nothing.
 
+The fixtures are committed, so the view half runs on a fresh clone with no
+database and no server:
+
+```sh
+/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc test_views.js
+```
+
+Use that while working on `static/`; use `test_views.sh` after touching
+`app.py`, because only that re-records what the views are tested against.
+
 The build itself is checked by reconciling the box scores against the game
 logs, which are independent sources for the same games: summed batting lines
 match the game log's team totals for **100%** of games in every era, and where
