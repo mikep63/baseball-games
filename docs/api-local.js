@@ -112,7 +112,15 @@ window.LocalAPI = (function () {
         const bat = rows(s, 'batC', 'bat'); deref(bat, 'g');
         const pit = rows(s, 'pitC', 'pit'); deref(pit, 'g');
         const ph = rows(s, 'phC', 'ph'); deref(ph, 'g');
+        // sparse extras: absent means zero, not unknown
+        const batx = rows(s, 'batxC', 'batx'); deref(batx, 'g');
+        const xBy = new Map(batx.map(x => [x.game + '|' + x.person, x]));
+        bat.forEach(b => {
+          const x = xBy.get(b.game + '|' + b.person);
+          for (const k of ['sh', 'sf', 'hbp', 'cs', 'gidp']) b[k] = x ? (x[k] || 0) : 0;
+        });
         const bev = rows(s, 'bevC', 'bev'); deref(bev, 'g');
+        const tbox = rows(s, 'tboxC', 'tbox'); deref(tbox, 'g');
         const ros = rows(s, 'rosC', 'ros');
         const byId = new Map(games.map(g => [g.id, g]));
         const group = (list) => {
@@ -121,7 +129,8 @@ window.LocalAPI = (function () {
           return m;
         };
         return { games, byId, bat: group(bat), pit: group(pit),
-                 ph: group(ph), bev: group(bev), ros, allBat: bat, allPit: pit };
+                 ph: group(ph), bev: group(bev), tbox: group(tbox), ros,
+                 allBat: bat, allPit: pit };
       })());
     }
     return shards.get(yr);
@@ -210,18 +219,22 @@ window.LocalAPI = (function () {
 
     const phBy = new Map((s.ph.get(gid) || []).map(x => [x.person, x.inning]));
 
+    const last = id => (pe.get(id) || {}).last || null;
     const batting = (s.bat.get(gid) || []).map(b => Object.assign({}, b, {
-      name: nameOf(pe.get(b.person)),
+      name: nameOf(pe.get(b.person)), lastName: last(b.person),
       positions: b.pos ? String(b.pos).split('-').map(x => POSITIONS[x] || x) : [],
       pinchHitInning: phBy.get(b.person) ?? null,
     }));
     const pitching = (s.pit.get(gid) || []).map(p => Object.assign({}, p, {
-      name: nameOf(pe.get(p.person)),
+      name: nameOf(pe.get(p.person)), lastName: last(p.person),
     }));
-    const events = (s.bev.get(gid) || []).map(e => Object.assign({}, e, {
-      playerNames: (e.players || '').split(',').filter(Boolean)
-        .map(x => nameOf(pe.get(x)) || x),
-    }));
+    const events = (s.bev.get(gid) || []).map(e => {
+      const parts = (e.players || '').split(',').filter(Boolean);
+      return Object.assign({}, e, {
+        playerNames: parts.map(x => nameOf(pe.get(x)) || x),
+        playerLast: parts.map(x => last(x) || nameOf(pe.get(x)) || x),
+      });
+    });
 
     const who = {};
     ['wp', 'lp', 'sv', 'ump_hp', 'ump_1b', 'ump_2b', 'ump_3b',
@@ -239,7 +252,8 @@ window.LocalAPI = (function () {
       }),
       park: pk.by.get(g.park) || null,
       people: who, batting, pitching, fielding: [], running: [],
-      teamBox: {}, events,
+      teamBox: Object.fromEntries((s.tbox.get(gid) || []).map(t => [t.side, t])),
+      events,
     };
   }
 

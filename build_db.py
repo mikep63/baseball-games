@@ -310,9 +310,22 @@ def load_teams(conn):
 
 
 def load_parks(conn):
-    rows = [(r["PARKID"], text(r["NAME"]), text(r["AKA"]), text(r["CITY"]),
-             text(r["STATE"]), text(r["START"]), text(r["END"]), text(r["LEAGUE"]),
-             text(r["NOTES"])) for r in read_csv(rel("biodata/ballparks.csv"))]
+    """Ballparks, with the name field split where it holds more than one.
+
+    One row -- Chicago's CHI12 -- carries two current names separated by a
+    semicolon, so a page renders "Guaranteed Rate Field;U.S. Cellular Field".
+    The first is the name; the others belong with the former names in AKA.
+    Harmless where there is no semicolon, so it needs no special case and
+    stops applying by itself if the source is tidied.
+    """
+    rows = []
+    for r in read_csv(rel("biodata/ballparks.csv")):
+        names = [x.strip() for x in (r["NAME"] or "").split(";") if x.strip()]
+        aka = [x.strip() for x in (r["AKA"] or "").split(";") if x.strip()]
+        rows.append((r["PARKID"], names[0] if names else None,
+                     "; ".join(names[1:] + aka) or None, text(r["CITY"]),
+                     text(r["STATE"]), text(r["START"]), text(r["END"]),
+                     text(r["LEAGUE"]), text(r["NOTES"])))
     conn.executemany("INSERT OR REPLACE INTO park VALUES(?,?,?,?,?,?,?,?,?)", rows)
     say("park", len(rows))
 

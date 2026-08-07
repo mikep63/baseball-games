@@ -94,9 +94,15 @@ td.num { font-variant-numeric: tabular-nums; }
 .result-W { color: var(--green); font-weight: bold; }
 .result-L { color: var(--accent); }
 
+/* The box-score notes. The label column is wide enough for "Batters faced"
+   so the values line up down the page rather than stepping in and out. */
 ul.events { list-style: none; font-size: .88rem; margin-bottom: 1rem; }
-ul.events li { padding: .12rem 0; }
-ul.events .k { color: var(--muted); display: inline-block; min-width: 4.5rem; }
+ul.events li { padding: .12rem 0; display: flex; gap: .6rem; align-items: baseline; }
+ul.events .k { color: var(--muted); flex: 0 0 7.5rem; }
+@media (max-width: 600px) {
+  ul.events li { display: block; }
+  ul.events .k { display: block; font-size: .78rem; }
+}
 
 .empty { color: var(--muted); padding: 1.2rem 0; }
 .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 1.5rem; }

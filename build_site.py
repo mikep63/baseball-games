@@ -38,10 +38,13 @@ GAME_COLS = ("id,date,number,gametype,vis,home,vis_score,home_score,park,"
              "attendance,duration,vis_line,home_line,has_box,has_pbp,daynight,"
              "temp,sky,wind_speed,start_time,ump_hp,ump_1b,ump_2b,ump_3b,"
              "mgr_vis,mgr_home,wp,lp,sv,vis_sp,home_sp,v_h,v_e,h_h,h_e")
-# No slot or seq: the box score prints batters in lineup order, and the export
-# is already written in that order, so the array index carries it for free.
-BAT_COLS = "person,side,ab,r,h,d,t,hr,rbi,bb,so,sb"
-PIT_COLS = "person,side,seq,outs,h,r,er,bb,so,hr,bfp"
+# seq is dropped -- the export is written in lineup order, so the array index
+# carries it. slot is kept because it is not decoration: Retrosheet writes 0
+# for a man who was in the game but never in the batting order, which since
+# the DH means the pitchers, and a box score does not list them among the
+# batters. 443,264 such rows, not one with a plate appearance.
+BAT_COLS = "person,side,slot,ab,r,h,d,t,hr,rbi,bb,so,sb"
+PIT_COLS = "person,side,seq,outs,h,r,er,bb,so,hr,bfp,hbp,wp,bk"
 
 total_bytes = 0
 
@@ -203,11 +206,19 @@ def export_season(conn, season):
     pit = [[idx[r[0]]] + list(r[1:]) for r in conn.execute(
         "SELECT game,%s FROM pit WHERE game IN (%s) ORDER BY game, side, seq"
         % (PIT_COLS, q), ids)]
+    # Sacrifices, hit batsmen, caught stealing and double plays grounded into
+    # are zero for most batters in most games, so only the rows that have one
+    # are exported. Absent means none, which is what the reader assumes.
+    batx = [[idx[r[0]]] + list(r[1:]) for r in conn.execute(
+        "SELECT game, person, sh, sf, hbp, cs, gidp FROM bat WHERE game IN (%s) "
+        "AND (sh > 0 OR sf > 0 OR hbp > 0 OR cs > 0 OR gidp > 0)" % q, ids)]
     ph = [[idx[r[0]], r[1], r[2]] for r in conn.execute(
         "SELECT game, person, inning FROM pinch_hit WHERE game IN (%s)" % q, ids)]
     bev = [[idx[r[0]]] + list(r[1:]) for r in conn.execute(
         "SELECT game, kind, side, players, inning, runners_on, outs "
         "FROM box_event WHERE game IN (%s) ORDER BY game, kind" % q, ids)]
+    tbox = [[idx[r[0]]] + list(r[1:]) for r in conn.execute(
+        "SELECT game, side, lob FROM team_box WHERE game IN (%s)" % q, ids)]
     roster = [list(r) for r in conn.execute(
         "SELECT team, person, pos, bats, throws FROM roster WHERE season = ? "
         "ORDER BY team, person", (season,))]
@@ -218,8 +229,10 @@ def export_season(conn, season):
         "gameC": cols(GAME_COLS), "games": [list(g) for g in games],
         "batC": ["g"] + cols(BAT_COLS) + ["pos"], "bat": bat,
         "pitC": ["g"] + cols(PIT_COLS), "pit": pit,
+        "batxC": ["g", "person", "sh", "sf", "hbp", "cs", "gidp"], "batx": batx,
         "phC": ["g", "person", "inning"], "ph": ph,
         "bevC": ["g", "kind", "side", "players", "inning", "on", "outs"], "bev": bev,
+        "tboxC": ["g", "side", "lob"], "tbox": tbox,
         "rosC": ["team", "person", "pos", "bats", "throws"], "ros": roster})
     return len(games), len(bat), size
 

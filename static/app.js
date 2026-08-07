@@ -192,26 +192,30 @@ function lineScoreHTML(g) {
   </tbody></table></div></div>`;
 }
 
-function battingTable(rows, season) {
+/* AB R H RBI BB SO and nothing else, the way a printed box score reads. The
+   extra-base hits and the running are itemised underneath in boxSummaryHTML
+   rather than given a column each, most of which would be zeroes. */
+function battingTable(all) {
+  // Slot 0 is a man who never entered the batting order -- since the DH, the
+  // pitchers. A box score lists them under Pitching, not among the batters.
+  const rows = all.filter(b => b.slot == null || b.slot > 0);
   const body = rows.map(b => ({
     cells: [
       playerLink(b.person, b.name)
       + (b.positions.length ? ` <span class="note">${esc(b.positions.join('-').toLowerCase())}</span>` : '')
       + (b.pinchHitInning ? ` <span class="pill quiet">PH ${b.pinchHitInning}</span>` : ''),
       n(b.ab), n(b.r), n(b.h), n(b.rbi), n(b.bb), n(b.so),
-      n(b.d), n(b.t), n(b.hr), n(b.sb),
     ],
   }));
   const sum = k => rows.reduce((a, b) => a + (b[k] || 0), 0);
   if (rows.length) {
     body.push({
       _cls: 'totals',
-      cells: ['Totals', sum('ab'), sum('r'), sum('h'), sum('rbi'), sum('bb'),
-        sum('so'), sum('d'), sum('t'), sum('hr'), sum('sb')],
+      cells: ['Totals', sum('ab'), sum('r'), sum('h'), sum('rbi'), sum('bb'), sum('so')],
     });
   }
-  return table([{ t: 'Batting', l: 1 }, { t: 'AB' }, { t: 'R' }, { t: 'H' }, { t: 'RBI' },
-                { t: 'BB' }, { t: 'SO' }, { t: '2B' }, { t: '3B' }, { t: 'HR' }, { t: 'SB' }],
+  return table([{ t: 'Batting', l: 1 }, { t: 'AB' }, { t: 'R' }, { t: 'H' },
+                { t: 'RBI' }, { t: 'BB' }, { t: 'SO' }],
                body, { empty: 'No batting lines recorded.' });
 }
 
@@ -225,22 +229,97 @@ function pitchingTable(rows) {
                { empty: 'No pitching lines recorded.' });
 }
 
-const EVENT_LABEL = { hr: 'HR', sb: 'SB', cs: 'CS', dp: 'DP', tp: 'TP', hp: 'HBP' };
+function ordinal(n_) {
+  if (n_ == null) return '';
+  const s = ['th', 'st', 'nd', 'rd'], v = n_ % 100;
+  return n_ + (s[(v - 20) % 10] || s[v] || s[0]);
+}
 
-function eventsHTML(events) {
-  if (!events.length) return '';
-  const by = {};
-  events.forEach(e => (by[e.kind] = by[e.kind] || []).push(e));
-  const items = Object.entries(by).map(([kind, list]) => {
-    const text = list.map(e => {
-      const who = e.playerNames.join(', ');
-      if (kind === 'hr') return `${e.playerNames[0]} (${e.inning}${e.inning ? 'th' : ''} inn, off ${e.playerNames[1]})`;
-      if (kind === 'sb' || kind === 'cs') return `${e.playerNames[0]}${e.inning ? ` (${e.inning})` : ''}`;
-      return who;
-    }).join('; ');
-    return `<li><span class="k">${esc(EVENT_LABEL[kind] || kind)}</span> ${esc(text)}</li>`;
-  }).join('');
-  return `<h3>In the box</h3><ul class="events">${items}</ul>`;
+/* "Wallner, Sosa 2" — a name, and a count only when it isn't one. */
+function tally(entries) {
+  const seen = new Map();
+  for (const { name, count } of entries) {
+    seen.set(name, (seen.get(name) || 0) + (count || 1));
+  }
+  return [...seen].map(([name, c]) => name + (c > 1 ? ' ' + c : ''));
+}
+
+const tb = b => (b.h || 0) + (b.d || 0) + 2 * (b.t || 0) + 3 * (b.hr || 0);
+
+/* The notes a modern box score carries under the line-ups, grouped the way
+   MLB's Gameday groups them: Batting, Baserunning, Fielding, then the
+   pitching notes.
+
+   Doubles, triples and total bases come from the batting lines — Retrosheet
+   itemises home runs, steals and double plays as events, but not those.
+   Anything needing to know the base-out state when a ball was hit (two-out
+   RBI, runners left in scoring position, RISP) is absent on purpose: those
+   need the play-by-play, and this build reads the box-score layer. */
+function boxSummaryHTML(batting, pitching, events, teamBox, sides) {
+  const byKind = {};
+  events.forEach(e => (byKind[e.kind] = byKind[e.kind] || []).push(e));
+  const nm = b => b.lastName || b.name;
+  const groups = [];
+
+  function section(title, build) {
+    const items = [];
+    build((label, list) => { if (list && list.length) items.push([label, list.join('; ')]); });
+    if (items.length) groups.push([title, items]);
+  }
+
+  section('Batting', add => {
+    add('2B', tally(batting.filter(b => b.d > 0).map(b => ({ name: nm(b), count: b.d }))));
+    add('3B', tally(batting.filter(b => b.t > 0).map(b => ({ name: nm(b), count: b.t }))));
+    // Home runs carry the inning, the pitcher and how many were aboard. Older
+    // seasons have no itemised events, so fall back to the batting lines.
+    const hrs = byKind.hr || [];
+    add('HR', hrs.length
+      ? hrs.map(e => {
+        const on = e.on ? `, ${e.on} on` : '';
+        const off = e.playerLast?.[1] ? ` off ${e.playerLast[1]}` : '';
+        return `${e.playerLast?.[0] || e.playerNames[0]} (${ordinal(e.inning)}${off}${on})`;
+      })
+      : tally(batting.filter(b => b.hr > 0).map(b => ({ name: nm(b), count: b.hr }))));
+    add('TB', tally(batting.filter(b => tb(b) > 0).map(b => ({ name: nm(b), count: tb(b) }))));
+    add('RBI', tally(batting.filter(b => b.rbi > 0).map(b => ({ name: nm(b), count: b.rbi }))));
+    add('SH', tally(batting.filter(b => b.sh > 0).map(b => ({ name: nm(b), count: b.sh }))));
+    add('SF', tally(batting.filter(b => b.sf > 0).map(b => ({ name: nm(b), count: b.sf }))));
+    add('GIDP', tally(batting.filter(b => b.gidp > 0).map(b => ({ name: nm(b), count: b.gidp }))));
+    add('Team LOB', [0, 1].map(s => teamBox?.[s]?.lob)
+      .map((v, i) => (v == null ? null : `${sides[i]} ${v}`)).filter(Boolean));
+  });
+
+  section('Baserunning', add => {
+    const sb = byKind.sb || [], cs = byKind.cs || [];
+    add('SB', sb.length
+      ? tally(sb.map(e => ({ name: e.playerLast?.[0] || e.playerNames[0] })))
+      : tally(batting.filter(b => b.sb > 0).map(b => ({ name: nm(b), count: b.sb }))));
+    add('CS', cs.length
+      ? tally(cs.map(e => ({ name: e.playerLast?.[0] || e.playerNames[0] })))
+      : tally(batting.filter(b => b.cs > 0).map(b => ({ name: nm(b), count: b.cs }))));
+  });
+
+  section('Fielding', add => {
+    // Written as the sequence of fielders who turned it, the way a box score does
+    add('DP', (byKind.dp || []).map(e => (e.playerLast || e.playerNames).join('-')));
+    add('TP', (byKind.tp || []).map(e => (e.playerLast || e.playerNames).join('-')));
+  });
+
+  section('Pitching', add => {
+    add('WP', tally(pitching.filter(p => p.wp > 0).map(p => ({ name: nm(p), count: p.wp }))));
+    add('Balk', tally(pitching.filter(p => p.bk > 0).map(p => ({ name: nm(p), count: p.bk }))));
+    add('HBP', (byKind.hp || []).map(e => {
+      const [pitcher, batter] = e.playerLast || e.playerNames;
+      return batter ? `${batter} (by ${pitcher})` : pitcher;
+    }));
+    add('Batters faced', pitching.filter(p => p.bfp != null)
+      .map(p => `${nm(p)} ${p.bfp}`));
+  });
+
+  if (!groups.length) return '';
+  return groups.map(([title, items]) =>
+    `<h3>${esc(title)}</h3><ul class="events">${items.map(([k, v]) =>
+      `<li><span class="k">${esc(k)}</span> ${esc(v)}</li>`).join('')}</ul>`).join('');
 }
 
 async function viewGame(parts) {
@@ -286,7 +365,8 @@ async function viewGame(parts) {
     ${lineScoreHTML(g)}
     <div class="meta-grid">${meta.join('')}</div>
     ${sides.map(s => `<h3>${esc(s.name)}</h3>${battingTable(s.bat)}${pitchingTable(s.pit)}`).join('')}
-    ${eventsHTML(d.events)}`;
+    ${boxSummaryHTML(d.batting, d.pitching, d.events, d.teamBox,
+                     [g.visName, g.homeName])}`;
 }
 
 // ------------------------------------------------------------------- player

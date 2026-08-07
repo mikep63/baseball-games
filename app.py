@@ -86,6 +86,19 @@ def people_map(conn, ids):
     return out
 
 
+def surname_map(conn, ids):
+    """id -> surname. Box-score summaries are written in last names."""
+    ids = [i for i in set(ids) if i]
+    if not ids:
+        return {}
+    out = {}
+    for chunk in (ids[i:i + 400] for i in range(0, len(ids), 400)):
+        for r in conn.execute("SELECT id, last FROM person WHERE id IN (%s)"
+                              % ",".join("?" * len(chunk)), chunk):
+            out[r["id"]] = r["last"]
+    return out
+
+
 def team_map(conn, pairs):
     """(team, season) -> "City Nickname"."""
     out = {}
@@ -226,6 +239,7 @@ def api_game(gid, conn):
     for e in events:
         ids += (e["players"] or "").split(",")
     names = people_map(conn, ids)
+    lasts = surname_map(conn, ids)
 
     # positions each man played, so the box score can read "Betts rf-cf"
     pos_by_person = {}
@@ -234,10 +248,12 @@ def api_game(gid, conn):
             POSITIONS.get(f["pos"], str(f["pos"])))
     for b in batting:
         b["name"] = names.get(b["person"])
+        b["lastName"] = lasts.get(b["person"])
         b["positions"] = pos_by_person.get((b["side"], b["person"]), [])
         b["pinchHitInning"] = b.pop("ph_inning", None)
     for p in pitching:
         p["name"] = names.get(p["person"])
+        p["lastName"] = lasts.get(p["person"])
         p["ip"] = "%d.%d" % (p["outs"] // 3, p["outs"] % 3) if p["outs"] is not None else None
     for f in fielding:
         f["name"] = names.get(f["person"])
@@ -245,7 +261,9 @@ def api_game(gid, conn):
     for r in running:
         r["name"] = names.get(r["person"])
     for e in events:
-        e["playerNames"] = [names.get(x, x) for x in (e["players"] or "").split(",") if x]
+        parts = [x for x in (e["players"] or "").split(",") if x]
+        e["playerNames"] = [names.get(x, x) for x in parts]
+        e["playerLast"] = [lasts.get(x) or names.get(x, x) for x in parts]
 
     return {
         "game": dict(g, visName=tnames.get((g["vis"], season), g["vis"]),
