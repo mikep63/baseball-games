@@ -343,28 +343,45 @@ function boxSummaryHTML(batting, pitching, events, teamBox, sides) {
       `<li><span class="k">${esc(k)}</span> ${esc(v)}</li>`).join('')}</ul>`).join('');
 }
 
-async function viewGame(parts) {
-  const d = await api('/game/' + parts[0]);
-  const g = d.game, p = d.people;
-  const meta = [];
-  const add = (k, v) => { if (v) meta.push(`<div><span class="k">${k}</span> ${v}</div>`); };
-  add('Park', d.park ? link('#/park/' + d.park.id, d.park.name) : g.park);
+const UMP_SPOTS = [['ump_hp', 'HP'], ['ump_1b', '1B'], ['ump_2b', '2B'],
+                   ['ump_3b', '3B'], ['ump_lf', 'LF'], ['ump_rf', 'RF']];
+
+/* Everything about the occasion rather than the play: where, who officiated,
+   how long it took, what the weather was doing. It sits under the box score
+   because that is where a box score puts it. */
+function gameInfoHTML(g, park, p, pitching) {
+  const items = [];
+  const add = (k, v) => { if (v) items.push([k, v]); };
+  add('Venue', park ? link('#/park/' + park.id, park.name) : esc(g.park || ''));
   add('Attendance', g.attendance ? g.attendance.toLocaleString() : '');
-  add('Time', g.duration ? `${Math.floor(g.duration / 60)}:${String(g.duration % 60).padStart(2, '0')}` : '');
-  add('Started', g.start_time);
-  // Each decision is a pill beside its pitcher in the table below. It is only
-  // named up here when that pitcher has no line to carry it -- which means the
-  // seasons before 1898, where the game log records who won and lost but there
-  // is no box score to put him in.
-  const pitched = new Set(d.pitching.map(x => x.person));
+  add('First pitch', esc(g.start_time || ''));
+  add('T', g.duration
+    ? `${Math.floor(g.duration / 60)}:${String(g.duration % 60).padStart(2, '0')}` : '');
+  add('Weather', esc([g.temp ? g.temp + '°F' : '',
+    g.sky && g.sky !== 'unknown' ? g.sky : ''].filter(Boolean).join(', ')));
+  add('Wind', esc(g.wind_speed
+    ? `${g.wind_speed} mph${g.wind_dir && g.wind_dir !== 'unknown' ? ', ' + g.wind_dir : ''}` : ''));
+  add('Umpires', UMP_SPOTS.map(([k, spot]) => (p[k] ? `${spot}: ${p[k]}` : null))
+    .filter(Boolean).map(esc).join('. '));
+  add('Managers', esc([p.mgr_vis, p.mgr_home].filter(Boolean).join(' / ')));
+
+  // The decisions are pills beside their pitchers. They are named here only
+  // when the man has no line to carry one -- 1,744 games where the log records
+  // who won and lost and there is no box score to put him in.
+  const pitched = new Set(pitching.map(x => x.person));
   for (const [key, label] of [['wp', 'Winning pitcher'], ['lp', 'Losing pitcher'],
                               ['sv', 'Save']]) {
     if (g[key] && !pitched.has(g[key])) add(label, playerLink(g[key], p[key]));
   }
-  add('Home plate', playerLink(g.ump_hp, p.ump_hp));
-  add('Managers', [p.mgr_vis, p.mgr_home].filter(Boolean).join(' / '));
-  add('Weather', [g.temp ? g.temp + '°F' : '', g.sky !== 'unknown' ? g.sky : '',
-    g.wind_speed ? `wind ${g.wind_speed}mph` : ''].filter(Boolean).join(', '));
+
+  if (!items.length) return '';
+  return `<h3>Game info</h3><ul class="events">${items.map(([k, v]) =>
+    `<li><span class="k">${k}</span> ${v}</li>`).join('')}</ul>`;
+}
+
+async function viewGame(parts) {
+  const d = await api('/game/' + parts[0]);
+  const g = d.game, p = d.people;
 
   const decisions = {};
   if (g.wp) decisions[g.wp] = 'W';
@@ -395,11 +412,11 @@ async function viewGame(parts) {
     </div>
     <p class="note">${niceDate(g.date)}${g.number !== '0' ? ` — game ${g.number} of a doubleheader` : ''}</p>
     ${lineScoreHTML(g)}
-    <div class="meta-grid">${meta.join('')}</div>
     ${sides.map(s => `<h3>${esc(s.name)}</h3>${battingTable(s.bat)}${
       pitchingTable(s.pit, decisions)}`).join('')}
     ${boxSummaryHTML(d.batting, d.pitching, d.events, d.teamBox,
-                     [g.visName, g.homeName])}`;
+                     [g.visName, g.homeName])}
+    ${gameInfoHTML(g, d.park, p, d.pitching)}`;
 }
 
 // ------------------------------------------------------------------- player
