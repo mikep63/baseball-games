@@ -127,3 +127,8 @@ footer p { margin-bottom: .5rem; }
 }
 
 h4 { font-size: .95rem; margin: .9rem 0 .3rem; color: var(--green); }
+
+/* Pitching decisions, coloured to match the W/L used on a team schedule. */
+.pill.win  { background: var(--green); color: #fff; }
+.pill.loss { background: var(--accent); color: #fff; }
+.pill.save { background: #4a6fa5; color: #fff; }

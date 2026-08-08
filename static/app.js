@@ -230,11 +230,21 @@ function battingTable(all) {
                body, { empty: 'No batting lines recorded.' });
 }
 
-function pitchingTable(rows) {
-  const body = rows.map(p => ({
-    cells: [playerLink(p.person, p.name), ip(p.outs), n(p.h), n(p.r), n(p.er),
-      n(p.bb), n(p.so), n(p.hr), n(p.bfp)],
-  }));
+const DECISION = { W: ['win', 'Winning pitcher'], L: ['loss', 'Losing pitcher'],
+                   SV: ['save', 'Save'] };
+
+/* The decision belongs against the man who earned it, not in a separate list
+   at the top of the page that makes you match names up by eye. */
+function pitchingTable(rows, decisions = {}) {
+  const body = rows.map(p => {
+    const d = decisions[p.person];
+    const [cls, title] = d ? DECISION[d] : [];
+    return {
+      cells: [playerLink(p.person, p.name)
+        + (d ? ` <span class="pill ${cls}" title="${title}">${d}</span>` : ''),
+        ip(p.outs), n(p.h), n(p.r), n(p.er), n(p.bb), n(p.so), n(p.hr), n(p.bfp)],
+    };
+  });
   return table([{ t: 'Pitching', l: 1 }, { t: 'IP' }, { t: 'H' }, { t: 'R' }, { t: 'ER' },
                 { t: 'BB' }, { t: 'SO' }, { t: 'HR' }, { t: 'BF' }], body,
                { empty: 'No pitching lines recorded.' });
@@ -342,13 +352,24 @@ async function viewGame(parts) {
   add('Attendance', g.attendance ? g.attendance.toLocaleString() : '');
   add('Time', g.duration ? `${Math.floor(g.duration / 60)}:${String(g.duration % 60).padStart(2, '0')}` : '');
   add('Started', g.start_time);
-  add('Winning pitcher', playerLink(g.wp, p.wp));
-  add('Losing pitcher', playerLink(g.lp, p.lp));
-  add('Save', playerLink(g.sv, p.sv));
+  // Each decision is a pill beside its pitcher in the table below. It is only
+  // named up here when that pitcher has no line to carry it -- which means the
+  // seasons before 1898, where the game log records who won and lost but there
+  // is no box score to put him in.
+  const pitched = new Set(d.pitching.map(x => x.person));
+  for (const [key, label] of [['wp', 'Winning pitcher'], ['lp', 'Losing pitcher'],
+                              ['sv', 'Save']]) {
+    if (g[key] && !pitched.has(g[key])) add(label, playerLink(g[key], p[key]));
+  }
   add('Home plate', playerLink(g.ump_hp, p.ump_hp));
   add('Managers', [p.mgr_vis, p.mgr_home].filter(Boolean).join(' / '));
   add('Weather', [g.temp ? g.temp + '°F' : '', g.sky !== 'unknown' ? g.sky : '',
     g.wind_speed ? `wind ${g.wind_speed}mph` : ''].filter(Boolean).join(', '));
+
+  const decisions = {};
+  if (g.wp) decisions[g.wp] = 'W';
+  if (g.lp) decisions[g.lp] = 'L';
+  if (g.sv) decisions[g.sv] = 'SV';
 
   const sides = [0, 1].map(side => ({
     side,
@@ -375,7 +396,8 @@ async function viewGame(parts) {
     <p class="note">${niceDate(g.date)}${g.number !== '0' ? ` — game ${g.number} of a doubleheader` : ''}</p>
     ${lineScoreHTML(g)}
     <div class="meta-grid">${meta.join('')}</div>
-    ${sides.map(s => `<h3>${esc(s.name)}</h3>${battingTable(s.bat)}${pitchingTable(s.pit)}`).join('')}
+    ${sides.map(s => `<h3>${esc(s.name)}</h3>${battingTable(s.bat)}${
+      pitchingTable(s.pit, decisions)}`).join('')}
     ${boxSummaryHTML(d.batting, d.pitching, d.events, d.teamBox,
                      [g.visName, g.homeName])}`;
 }
