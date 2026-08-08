@@ -553,9 +553,21 @@ async function renderGameLog(id, season) {
 }
 
 /* The batting and pitching tables for one set of games. */
+/* A plate appearance, not merely a batting line. Retrosheet writes one for
+   every man who was in the game, so a relief pitcher in the DH era collects a
+   row of zeroes for each outing -- 69 of them for Bednar in 2025, and
+   1,019,741 rows across the database that record no time at bat at all.
+   Listing those as a batting log is listing nothing. */
+const hadPA = g => (g.ab || 0) + (g.bb || 0) + (g.hbp || 0)
+                 + (g.sh || 0) + (g.sf || 0) > 0;
+
 function logTables(games, common, HEAD) {
-  const batted = games.filter(g => g.ab != null);
+  const batted = games.filter(hadPA);
   const pitched = games.filter(g => g.p_outs != null);
+  // Lead with whichever he mostly was. A pitcher's log should open with his
+  // pitching; Ohtani's, where he batted in 176 games and pitched in 18,
+  // should not.
+  const pitcherFirst = pitched.length > games.length / 2;
 
   const batTotal = k => batted.reduce((a, g) => a + (g[k] || 0), 0);
   const batRows = batted.map(g => ({
@@ -579,18 +591,18 @@ function logTables(games, common, HEAD) {
       pitTotal('p_bb'), pitTotal('p_so'), pitTotal('p_hr')] });
   }
 
-  const parts = [];
-  if (batRows.length) {
-    parts.push((pitRows.length ? '<h5>Batting</h5>' : '') + table(
+  const both = batRows.length && pitRows.length;
+  const batBlock = batRows.length
+    ? (both ? '<h5>Batting</h5>' : '') + table(
       [...HEAD, { t: 'AB' }, { t: 'R' }, { t: 'H' }, { t: '2B' }, { t: '3B' },
-       { t: 'HR' }, { t: 'RBI' }, { t: 'BB' }, { t: 'SO' }, { t: 'SB' }], batRows));
-  }
-  if (pitRows.length) {
-    parts.push((batRows.length ? '<h5>Pitching</h5>' : '') + table(
+       { t: 'HR' }, { t: 'RBI' }, { t: 'BB' }, { t: 'SO' }, { t: 'SB' }], batRows)
+    : '';
+  const pitBlock = pitRows.length
+    ? (both ? '<h5>Pitching</h5>' : '') + table(
       [...HEAD, { t: 'IP' }, { t: 'H' }, { t: 'R' }, { t: 'ER' }, { t: 'BB' },
-       { t: 'SO' }, { t: 'HR' }], pitRows));
-  }
-  return parts.join('');
+       { t: 'SO' }, { t: 'HR' }], pitRows)
+    : '';
+  return pitcherFirst ? pitBlock + batBlock : batBlock + pitBlock;
 }
 
 // --------------------------------------------------------------------- team

@@ -312,6 +312,7 @@ window.LocalAPI = (function () {
         d: e.bat?.d ?? null, t: e.bat?.t ?? null, hr: e.bat?.hr ?? null,
         rbi: e.bat?.rbi ?? null, bb: e.bat?.bb ?? null, so: e.bat?.so ?? null,
         sb: e.bat?.sb ?? null,
+        hbp: e.bat?.hbp ?? null, sh: e.bat?.sh ?? null, sf: e.bat?.sf ?? null,
         p_h: e.pit?.h ?? null, p_r: e.pit?.r ?? null, p_er: e.pit?.er ?? null,
         p_bb: e.pit?.bb ?? null, p_so: e.pit?.so ?? null, p_hr: e.pit?.hr ?? null,
         p_outs: e.pit?.outs ?? null,

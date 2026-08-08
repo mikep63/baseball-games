@@ -366,6 +366,7 @@ def api_player_games(pid, q, conn):
         SELECT g.id, g.date, g.season, g.gametype, g.vis, g.home,
                g.vis_score, g.home_score, g.park,
                b.ab, b.r, b.h, b.d, b.t, b.hr, b.rbi, b.bb, b.so, b.sb,
+               b.hbp, b.sh, b.sf,
                p.outs p_outs, p.h p_h, p.r p_r, p.er p_er, p.bb p_bb,
                p.so p_so, p.hr p_hr,
                CASE x.side WHEN 0 THEN g.vis ELSE g.home END team,
