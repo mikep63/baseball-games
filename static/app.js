@@ -102,9 +102,22 @@ async function route() {
 async function viewGames(_, q) {
   const season = q.get('season') || META.lastSeason;
   const team = q.get('team') || '';
-  const gametype = q.get('gametype') || '';
+  let gametype = q.get('gametype') || '';
   const date = q.get('date') || '';
   const park = q.get('park') || '';
+
+  /* Only the kinds of game this season actually had. 1968 has no division
+     series and no wild card because neither existed; 2020 has no All-Star
+     game and 1994 no World Series because neither was played. Offering them
+     is offering an empty result. Where a season has one kind only -- 32 of
+     them do -- "Any" and that kind mean the same thing, so the control goes
+     away rather than sit there doing nothing.
+
+     Settled before the query, not after: a type carried over from another
+     season in the URL would otherwise be sent, come back with nothing, and
+     leave the reader looking at an empty table and a filter reading "Any". */
+  const seasonTypes = (META.seasonTypes || {})[season] || Object.keys(META.gametypes);
+  if (!seasonTypes.includes(gametype)) gametype = '';
 
   const teams = (await api('/teams?season=' + season)).teams;
   const params = new URLSearchParams({ season, limit: 400 });
@@ -113,10 +126,10 @@ async function viewGames(_, q) {
   if (date) params.set('date', date);
   if (park) params.set('park', park);
   const data = await api('/games?' + params);
-
   const typeOpts = ['<option value="">Any</option>'].concat(
-    Object.entries(META.gametypes).map(([k, v]) =>
-      `<option value="${k}"${k === gametype ? ' selected' : ''}>${esc(v)}</option>`)).join('');
+    seasonTypes.map(k =>
+      `<option value="${k}"${k === gametype ? ' selected' : ''}>${
+        esc(META.gametypes[k] || k)}</option>`)).join('');
   const teamOpts = ['<option value="">Every club</option>'].concat(
     teams.map(t => `<option value="${t.id}"${t.id === team ? ' selected' : ''}>${
       esc((t.city || '') + ' ' + (t.nickname || ''))}</option>`)).join('');
@@ -147,7 +160,8 @@ async function viewGames(_, q) {
       <label>Season<select id="f-season">${years.map(y =>
         `<option${y == season ? ' selected' : ''}>${y}</option>`).join('')}</select></label>
       <label>Club<select id="f-team">${teamOpts}</select></label>
-      <label>Type<select id="f-type">${typeOpts}</select></label>
+      ${seasonTypes.length > 1
+        ? `<label>Type<select id="f-type">${typeOpts}</select></label>` : ''}
       <label>Date<input type="date" id="f-date" value="${esc(date)}"></label>
     </div>
     <h2>${data.total.toLocaleString()} games${team ? '' : ` in ${season}`}</h2>
@@ -161,13 +175,16 @@ async function viewGames(_, q) {
   const go = () => {
     const p = new URLSearchParams({ season: val('f-season') });
     if (val('f-team')) p.set('team', val('f-team'));
-    if (val('f-type')) p.set('gametype', val('f-type'));
+    const t = document.getElementById('f-type');
+    if (t && t.value) p.set('gametype', t.value);
     if (val('f-date')) p.set('date', val('f-date'));
     if (park) p.set('park', park);
     location.hash = '#/games?' + p;
   };
-  ['f-season', 'f-team', 'f-type', 'f-date'].forEach(id =>
-    document.getElementById(id).addEventListener('change', go));
+  ['f-season', 'f-team', 'f-type', 'f-date'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', go);
+  });
 }
 
 const val = id => document.getElementById(id).value;

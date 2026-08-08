@@ -23,6 +23,9 @@ import shutil
 import sqlite3
 import sys
 
+GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "worldseries",
+                  "allstar", "negro"]
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "retro.sqlite")
 STATIC = os.path.join(BASE, "static")
@@ -245,9 +248,16 @@ def export_season(conn, season):
 def export_meta(conn, seasons):
     m = conn.execute("SELECT COUNT(*), SUM(has_box), SUM(has_pbp), "
                      "MIN(season), MAX(season) FROM game").fetchone()
+    by_season = {}
+    for season, gametype in conn.execute(
+            "SELECT DISTINCT season, gametype FROM game ORDER BY season"):
+        by_season.setdefault(season, []).append(gametype)
+    for v in by_season.values():
+        v.sort(key=lambda g: GAMETYPE_ORDER.index(g) if g in GAMETYPE_ORDER else 99)
     path = os.path.join(DATA, "meta.json")
     write(path, {"firstSeason": m[3], "lastSeason": m[4], "games": m[0],
                  "withBox": m[1], "withPlays": m[2], "seasons": seasons,
+                 "seasonTypes": by_season,
                  "gametypes": {"regular": "Regular season",
                                "worldseries": "World Series",
                                "lcs": "League Championship Series",

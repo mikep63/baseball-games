@@ -29,6 +29,11 @@ STATIC = os.path.join(BASE, "static")
 POSITIONS = {1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF",
              8: "CF", 9: "RF", 10: "DH", 11: "PH", 12: "PR"}
 
+# The order a season's rounds are played in, so the filter reads down the
+# calendar rather than in whatever order the rows came back.
+GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "worldseries",
+                  "allstar", "negro"]
+
 GAMETYPES = {"regular": "Regular season", "worldseries": "World Series",
              "lcs": "League Championship Series", "division": "Division Series",
              "wildcard": "Wild Card", "allstar": "All-Star Game",
@@ -118,9 +123,19 @@ def api_meta(q, conn):
     m = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM meta")}
     counts = one(conn.execute(
         "SELECT COUNT(*) games, SUM(has_box) with_box, SUM(has_pbp) with_pbp FROM game"))
+    # Which kinds of game each season actually had. There were no division
+    # series in 1968, no All-Star game in 2020 and no World Series in 1994,
+    # and a filter that offers them is offering nothing. 7 KB for all 155.
+    by_season = {}
+    for season, gametype in conn.execute(
+            "SELECT DISTINCT season, gametype FROM game ORDER BY season"):
+        by_season.setdefault(season, []).append(gametype)
+    for v in by_season.values():
+        v.sort(key=lambda g: GAMETYPE_ORDER.index(g) if g in GAMETYPE_ORDER else 99)
     return {"firstSeason": int(m["first_season"]), "lastSeason": int(m["last_season"]),
             "games": counts["games"], "withBox": counts["with_box"],
-            "withPlays": counts["with_pbp"], "gametypes": GAMETYPES}
+            "withPlays": counts["with_pbp"], "gametypes": GAMETYPES,
+            "seasonTypes": by_season}
 
 
 def api_search(q, conn):
