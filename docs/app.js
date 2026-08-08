@@ -653,32 +653,60 @@ async function viewPark(parts) {
 
 // ------------------------------------------------------------------- search
 
+let searchTimer = null;
+let searchToken = 0;
+
 async function viewSearch(_, q) {
   const term = q.get('q') || '';
   app.innerHTML = `
     <div class="controls">
       <label>Name<input type="search" id="s-q" value="${esc(term)}"
-             placeholder="Ruth, Mays, Aparicio…" autofocus></label>
-      <button id="s-go">Search</button>
+             placeholder="Ruth, Mays, Aparicio…" autocomplete="off" autofocus></label>
     </div>
     <div id="results"></div>`;
-  const go = () => { location.hash = '#/search?q=' + encodeURIComponent(val('s-q')); };
-  document.getElementById('s-go').addEventListener('click', go);
-  document.getElementById('s-q').addEventListener('keydown', e => {
-    if (e.key === 'Enter') go();
+  const box = document.getElementById('s-q');
+
+  /* Results as you type. The hash is kept in step with replaceState rather
+     than by assignment: setting location.hash fires hashchange, which would
+     re-run the router, rebuild this view and take the cursor out of the box
+     on every keystroke. */
+  const run = async (text) => {
+    const mine = ++searchToken;
+    const out = document.getElementById('results');
+    if (text.length < 2) {
+      out.innerHTML = text
+        ? '<p class="note">Keep typing — two letters or more.</p>' : '';
+      return;
+    }
+    const d = await api('/search?q=' + encodeURIComponent(text));
+    if (mine !== searchToken) return;   // a later keystroke already answered
+    const rows = d.results.map(r => ({
+      cells: [playerLink(r.id, r.name) + (r.hof ? '<span class="pill alt">HOF</span>' : ''),
+        esc(r.roles.join(', ')),
+        r.debut ? r.debut.slice(0, 4) : '',
+        r.lastGame ? r.lastGame.slice(0, 4) : '',
+        r.games ? r.games.toLocaleString() : ''],
+    }));
+    out.innerHTML = table(
+      [{ t: 'Name', l: 1 }, { t: 'Role', l: 1 }, { t: 'From' }, { t: 'To' },
+       { t: 'Games' }], rows, { empty: 'Nobody by that name.' });
+  };
+
+  box.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const text = box.value.trim();
+    history.replaceState(null, '',
+      '#/search' + (text ? '?q=' + encodeURIComponent(text) : ''));
+    searchTimer = setTimeout(() => run(text), 250);
   });
-  if (!term) return;
-  const d = await api('/search?q=' + encodeURIComponent(term));
-  const rows = d.results.map(r => ({
-    cells: [playerLink(r.id, r.name) + (r.hof ? '<span class="pill alt">HOF</span>' : ''),
-      esc(r.roles.join(', ')),
-      r.debut ? r.debut.slice(0, 4) : '',
-      r.lastGame ? r.lastGame.slice(0, 4) : '',
-      r.games ? r.games.toLocaleString() : ''],
-  }));
-  document.getElementById('results').innerHTML = table(
-    [{ t: 'Name', l: 1 }, { t: 'Known as', l: 1 }, { t: 'From' }, { t: 'To' },
-     { t: 'Games' }], rows, { empty: 'Nobody by that name.' });
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { clearTimeout(searchTimer); run(box.value.trim()); }
+  });
+
+  // Warm the name index while they are still typing the first letter, so the
+  // first result set doesn't wait on a 2 MB download.
+  if (window.LocalAPI) api('/search?q=__warm__').catch(() => {});
+  if (term) run(term);
 }
 
 // -------------------------------------------------------------------- about

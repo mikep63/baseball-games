@@ -42,6 +42,14 @@ window.LocalAPI = (function () {
     if (!_people) {
       const p = await load('people.json');
       const list = rows(p, 'c', 'r');
+      // Lower-cased once here rather than 27,000 times per keystroke: the
+      // search runs on every character typed, and rebuilding these strings
+      // each time is what makes a live search feel sticky.
+      for (const x of list) {
+        x._full = ((x.first || '') + ' ' + (x.last || '')).trim().toLowerCase();
+        x._nick = ((x.nickname || '') + ' ' + (x.last || '')).trim().toLowerCase();
+        x._last = (x.last || '').toLowerCase();
+      }
       const by = new Map(list.map(x => [x.id, x]));
       _people = { list, by };
     }
@@ -159,9 +167,7 @@ window.LocalAPI = (function () {
     const { list } = await people();
     const out = [];
     for (const p of list) {
-      const full = ((p.first || '') + ' ' + (p.last || '')).trim().toLowerCase();
-      const nick = ((p.nickname || '') + ' ' + (p.last || '')).trim().toLowerCase();
-      const last = (p.last || '').toLowerCase();
+      const full = p._full, nick = p._nick, last = p._last;
       if (!full.includes(term) && !nick.includes(term) && !last.includes(term)) continue;
       const exact = full === term ? 0 : last === term ? 1
         : last.startsWith(term) ? 2 : full.startsWith(term) ? 3 : 4;
