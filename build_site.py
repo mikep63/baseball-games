@@ -105,7 +105,8 @@ def export_careers(conn):
     bat = conn.execute("""
         SELECT b.person, g.season, CASE b.side WHEN 0 THEN g.vis ELSE g.home END,
                g.gametype, COUNT(*), SUM(b.ab), SUM(b.r), SUM(b.h), SUM(b.d),
-               SUM(b.t), SUM(b.hr), SUM(b.rbi), SUM(b.bb), SUM(b.so), SUM(b.sb)
+               SUM(b.t), SUM(b.hr), SUM(b.rbi), SUM(b.bb), SUM(b.so), SUM(b.sb),
+               SUM(b.hbp), SUM(b.sh), SUM(b.sf)
         FROM bat b JOIN game g ON g.id = b.game
         GROUP BY b.person, g.season, 3, g.gametype
         ORDER BY b.person, g.season""").fetchall()
@@ -135,7 +136,8 @@ def export_careers(conn):
         path = os.path.join(CAREERS, letter + ".json")
         size = write(path, {
             "batC": ["person", "season", "team", "gametype", "g", "ab", "r", "h",
-                     "d", "t", "hr", "rbi", "bb", "so", "sb"], "bat": d["bat"],
+                     "d", "t", "hr", "rbi", "bb", "so", "sb", "hbp", "sh", "sf"],
+            "bat": d["bat"],
             "pitC": ["person", "season", "team", "gametype", "g", "outs", "h", "r",
                      "er", "bb", "so", "hr"], "pit": d["pit"],
             "fldC": ["person", "season", "gametype", "pos", "g", "outs", "po",

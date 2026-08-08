@@ -480,8 +480,15 @@ async function viewPlayer(parts, q) {
     cells: [r.season, r.position, r.g, ip(r.outs), n(r.po), n(r.a), n(r.e), n(r.dp)],
   }));
 
+  /* A man who never came to the plate gets no batting table. Retrosheet
+     writes a batting line for everyone who was in the game, so a modern
+     relief pitcher otherwise collects a season row of zeroes for every year
+     of his career. Asking for a plate appearance -- not merely a line --
+     keeps every pitcher who did bat, which before the DH is all of them. */
+  const anyPA = d.batting.filter(reg).some(r =>
+    (r.ab || 0) + (r.bb || 0) + (r.hbp || 0) + (r.sh || 0) + (r.sf || 0) > 0);
   const pitcherFirst = psum('outs') > 0 && bsum('ab') < 500;
-  const batting = batRows.length ? `<h3>Batting</h3>${table(
+  const batting = (batRows.length && anyPA) ? `<h3>Batting</h3>${table(
     [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'G' }, { t: 'AB' }, { t: 'R' }, { t: 'H' },
      { t: '2B' }, { t: '3B' }, { t: 'HR' }, { t: 'RBI' }, { t: 'BB' }, { t: 'SO' },
      { t: 'SB' }, { t: 'AVG' }], batRows)}` : '';
