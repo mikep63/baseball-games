@@ -323,8 +323,8 @@ function boxSummaryHTML(batting, pitching, events, teamBox, sides) {
       const [pitcher, batter] = e.playerLast || e.playerNames;
       return batter ? `${batter} (by ${pitcher})` : pitcher;
     }));
-    add('Batters faced', pitching.filter(p => p.bfp != null)
-      .map(p => `${nm(p)} ${p.bfp}`));
+    // Batters faced is a column in the pitching table above. Repeating it here
+    // as a run-on line said the same thing twice, less legibly.
   });
 
   if (!groups.length) return '';
