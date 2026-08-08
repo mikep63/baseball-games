@@ -37,7 +37,7 @@ nav#tabs a {
 nav#tabs a.active { background: var(--cream); color: var(--green); font-weight: bold; }
 nav#tabs a:not(.active):hover { background: var(--green-light); }
 
-main { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1.5rem 3rem; }
+main { max-width: 1100px; margin: 0 auto; padding: 1rem 1.5rem 2.5rem; }
 
 a { color: var(--green); }
 a:hover { color: var(--accent); }
@@ -52,15 +52,17 @@ input[type="search"] { width: min(420px, 90vw); }
 button { background: var(--green); color: #fff; border: none; cursor: pointer; padding: .5rem 1.2rem; }
 button:hover { background: var(--green-light); }
 
-h2 { font-size: 1.35rem; margin: 1.1rem 0 .4rem; color: var(--green); }
-h3 { font-size: 1.05rem; margin: 1.1rem 0 .35rem; color: var(--green); }
-.note { color: var(--muted); font-size: .82rem; margin: .3rem 0 .6rem; }
+h2 { font-size: 1.35rem; margin: .8rem 0 .3rem; color: var(--green); }
+h3 { font-size: 1.05rem; margin: .85rem 0 .25rem; color: var(--green); }
+.note { color: var(--muted); font-size: .82rem; margin: .2rem 0 .45rem; }
 .crumb { font-size: .85rem; color: var(--muted); margin-bottom: .5rem; }
 .crumb a { text-decoration: none; }
 
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; margin-bottom: 1rem; }
-table { border-collapse: collapse; width: 100%; font-size: .9rem; }
-th, td { padding: .35rem .55rem; text-align: right; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; margin-bottom: .7rem; }
+/* Dense on purpose: a box score is a table you scan down, and generous row
+   padding turns nine batters into a page of scrolling. */
+table { border-collapse: collapse; width: 100%; font-size: .88rem; line-height: 1.25; }
+th, td { padding: .17rem .5rem; text-align: right; white-space: nowrap; }
 th:first-child, td:first-child, th.l, td.l { text-align: left; }
 thead th { background: var(--green); color: #f0ecdf; position: sticky; top: 0; font-weight: normal; }
 tbody tr:nth-child(even) { background: var(--row-alt); }
@@ -74,7 +76,7 @@ td.num { font-variant-numeric: tabular-nums; }
 .linescore-wrap { overflow-x: auto; max-width: 100%; margin-bottom: 1rem; }
 .linescore { display: inline-block; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
 .linescore table { width: auto; }
-.linescore td, .linescore th { padding: .3rem .5rem; text-align: center; min-width: 1.7rem; }
+.linescore td, .linescore th { padding: .2rem .45rem; text-align: center; min-width: 1.6rem; }
 .linescore td.team { text-align: left; padding-right: 1.2rem; font-weight: bold; }
 .linescore td.rhe { font-weight: bold; background: var(--row-alt); }
 .linescore th.rhe { background: var(--green-light); }
@@ -100,8 +102,8 @@ td.num { font-variant-numeric: tabular-nums; }
 
 /* The box-score notes. The label column is wide enough for "Batters faced"
    so the values line up down the page rather than stepping in and out. */
-ul.events { list-style: none; font-size: .88rem; margin-bottom: 1rem; }
-ul.events li { padding: .12rem 0; display: flex; gap: .6rem; align-items: baseline; }
+ul.events { list-style: none; font-size: .88rem; line-height: 1.35; margin-bottom: .75rem; }
+ul.events li { padding: .04rem 0; display: flex; gap: .6rem; align-items: baseline; }
 ul.events .k { color: var(--muted); flex: 0 0 7.5rem; }
 @media (max-width: 600px) {
   ul.events li { display: block; }
@@ -126,7 +128,7 @@ footer p { margin-bottom: .5rem; }
   .two-col { grid-template-columns: 1fr; }
 }
 
-h4 { font-size: .95rem; margin: .9rem 0 .3rem; color: var(--green); }
+h4 { font-size: .95rem; margin: .7rem 0 .2rem; color: var(--green); }
 
 /* Pitching decisions, coloured to match the W/L used on a team schedule. */
 .pill.win  { background: var(--green); color: #fff; }

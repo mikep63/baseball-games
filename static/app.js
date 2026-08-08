@@ -242,11 +242,11 @@ function pitchingTable(rows, decisions = {}) {
     return {
       cells: [playerLink(p.person, p.name)
         + (d ? ` <span class="pill ${cls}" title="${title}">${d}</span>` : ''),
-        ip(p.outs), n(p.h), n(p.r), n(p.er), n(p.bb), n(p.so), n(p.hr), n(p.bfp)],
+        ip(p.outs), n(p.h), n(p.r), n(p.er), n(p.bb), n(p.so), n(p.hr)],
     };
   });
   return table([{ t: 'Pitching', l: 1 }, { t: 'IP' }, { t: 'H' }, { t: 'R' }, { t: 'ER' },
-                { t: 'BB' }, { t: 'SO' }, { t: 'HR' }, { t: 'BF' }], body,
+                { t: 'BB' }, { t: 'SO' }, { t: 'HR' }], body,
                { empty: 'No pitching lines recorded.' });
 }
 
@@ -333,8 +333,8 @@ function boxSummaryHTML(batting, pitching, events, teamBox, sides) {
       const [pitcher, batter] = e.playerLast || e.playerNames;
       return batter ? `${batter} (by ${pitcher})` : pitcher;
     }));
-    // Batters faced is a column in the pitching table above. Repeating it here
-    // as a run-on line said the same thing twice, less legibly.
+    add('Batters faced', pitching.filter(p => p.bfp != null)
+      .map(p => `${nm(p)} ${p.bfp}`));
   });
 
   if (!groups.length) return '';
