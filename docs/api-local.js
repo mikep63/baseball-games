@@ -204,14 +204,15 @@ window.LocalAPI = (function () {
     const yr = Number(q.get('season'));
     const t = await teams();
     if (!yr) return { franchises: [] };
-    const played = new Map(t.played.filter(p => p.season === yr).map(p => [p.team, p.games]));
+    const played = new Map(t.played.filter(p => p.season === yr).map(p => [p.team, p]));
     const out = t.list.filter(x => x.season === yr && played.has(x.id))
-      .map(x => ({ id: x.id, league: x.league, city: x.city,
-                   nickname: x.nickname, n: played.get(x.id) }))
+      .map(x => ({ id: x.id, league: x.league, city: x.city, nickname: x.nickname,
+                   n: played.get(x.id).games, allstar: played.get(x.id).allstar }))
       // SQLite sorts NULL before any value in an ascending ORDER BY, and the
       // clubs with no league recorded are the Negro League and exhibition
       // sides, so they head the list rather than trailing it.
-      .sort((a, b) => (b.league == null) - (a.league == null)
+      .sort((a, b) => a.allstar - b.allstar
+                   || (b.league == null) - (a.league == null)
                    || String(a.league || '').localeCompare(String(b.league || ''))
                    || String(a.city || '').localeCompare(String(b.city || '')));
     return { teams: out };

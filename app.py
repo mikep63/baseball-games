@@ -321,11 +321,13 @@ def api_player(pid, conn):
         FROM pit p JOIN game g ON g.id = p.game
         WHERE p.person = ? GROUP BY g.season, team, g.gametype
         ORDER BY g.season, team""" % PIT_TOTALS, (pid,)))
+    # Split by game type like batting and pitching: without it a World Series
+    # ring's worth of putouts lands in the regular-season row.
     fielding = rows(conn.execute("""
-        SELECT g.season, f.pos, COUNT(*) g, SUM(f.outs) outs, SUM(f.po) po,
-               SUM(f.a) a, SUM(f.e) e, SUM(f.dp) dp, SUM(f.pb) pb
+        SELECT g.season, g.gametype, f.pos, COUNT(*) g, SUM(f.outs) outs,
+               SUM(f.po) po, SUM(f.a) a, SUM(f.e) e, SUM(f.dp) dp, SUM(f.pb) pb
         FROM fld f JOIN game g ON g.id = f.game
-        WHERE f.person = ? GROUP BY g.season, f.pos
+        WHERE f.person = ? GROUP BY g.season, g.gametype, f.pos
         ORDER BY g.season, f.pos""", (pid,)))
     for f in fielding:
         f["position"] = POSITIONS.get(f["pos"], str(f["pos"]))
@@ -449,12 +451,21 @@ def api_park(park_id, conn):
 def api_teams(q, conn):
     season = intarg(q, "season")
     if season:
+        # allstar = a squad whose every game that season was an All-Star game.
+        # Deliberately not a match on ALS/NLS or on the words "All Stars":
+        # the 1927 Baltimore All Stars and Pirrone All Stars played real games
+        # against the Homestead Grays, and a rule of "played no regular-season
+        # game" would demote the Grays themselves, since Negro League games
+        # are typed 'negro' rather than 'regular'.
         return {"teams": rows(conn.execute("""
             SELECT t.id, t.league, t.city, t.nickname,
                    (SELECT COUNT(*) FROM game g
-                    WHERE (g.vis = t.id OR g.home = t.id) AND g.season = t.season) n
-            FROM team t WHERE t.season = ? AND n > 0 ORDER BY t.league, t.city""",
-                                           (season,)))}
+                    WHERE (g.vis = t.id OR g.home = t.id) AND g.season = t.season) n,
+                   (SELECT COUNT(*) FROM game g
+                    WHERE (g.vis = t.id OR g.home = t.id) AND g.season = t.season
+                      AND g.gametype <> 'allstar') = 0 AS allstar
+            FROM team t WHERE t.season = ? AND n > 0
+            ORDER BY allstar, t.league, t.city""", (season,)))}
     return {"franchises": rows(conn.execute(
         "SELECT * FROM franchise ORDER BY first, id"))}
 

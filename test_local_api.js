@@ -116,7 +116,8 @@ async function main() {
      ...rowPaths('batting', 22, ['season', 'team', 'teamName', 'gametype', 'g', 'ab',
                                  'r', 'h', 'hr', 'rbi', 'bb', 'so', 'sb']),
      ...rowPaths('pitching', 10, ['season', 'team', 'g', 'outs', 'h', 'er', 'so']),
-     ...rowPaths('fielding', 12, ['season', 'pos', 'position', 'g', 'po', 'a', 'e'])]);
+     ...rowPaths('fielding', 12, ['season', 'gametype', 'pos', 'position', 'g',
+                                  'po', 'a', 'e'])]);
 
   // --- a game log
   compare('/player/ruthb101/games?season=1927',
@@ -158,7 +159,7 @@ async function main() {
   // --- teams in a season
   compare('/teams?season=1927', await API.get('/teams?season=1927'),
     fixture('teams_season_1927'),
-    rowPaths('teams', 20, ['id', 'league', 'city', 'nickname', 'n']));
+    rowPaths('teams', 20, ['id', 'league', 'city', 'nickname', 'n', 'allstar']));
 
   print('');
   print(failures

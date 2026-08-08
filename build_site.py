@@ -114,10 +114,10 @@ def export_careers(conn):
         GROUP BY p.person, g.season, 3, g.gametype
         ORDER BY p.person, g.season""").fetchall()
     fld = conn.execute("""
-        SELECT f.person, g.season, f.pos, COUNT(*), SUM(f.outs), SUM(f.po),
-               SUM(f.a), SUM(f.e), SUM(f.dp), SUM(f.pb)
+        SELECT f.person, g.season, g.gametype, f.pos, COUNT(*), SUM(f.outs),
+               SUM(f.po), SUM(f.a), SUM(f.e), SUM(f.dp), SUM(f.pb)
         FROM fld f JOIN game g ON g.id = f.game
-        GROUP BY f.person, g.season, f.pos
+        GROUP BY f.person, g.season, g.gametype, f.pos
         ORDER BY f.person, g.season, f.pos""").fetchall()
     # Sharded on the player id's first character, which is the initial of his
     # surname. One file is 18 MB and every player page would pay for it;
@@ -135,7 +135,8 @@ def export_careers(conn):
                      "d", "t", "hr", "rbi", "bb", "so", "sb"], "bat": d["bat"],
             "pitC": ["person", "season", "team", "gametype", "g", "outs", "h", "r",
                      "er", "bb", "so", "hr"], "pit": d["pit"],
-            "fldC": ["person", "season", "pos", "g", "outs", "po", "a", "e", "dp", "pb"],
+            "fldC": ["person", "season", "gametype", "pos", "g", "outs", "po",
+                     "a", "e", "dp", "pb"],
             "fld": d["fld"]})
         biggest = max(biggest, size)
     print("  %-22s %9.1f KB  %s"
@@ -148,14 +149,15 @@ def export_reference(conn):
         "SELECT id, season, league, city, nickname FROM team ORDER BY season, id").fetchall()
     # which seasons a club actually played, so the team page needs no scan
     played = conn.execute("""
-        SELECT t, season, COUNT(*) FROM (
-            SELECT vis AS t, season FROM game
-            UNION ALL SELECT home, season FROM game)
+        SELECT t, season, COUNT(*),
+               SUM(CASE WHEN gametype <> 'allstar' THEN 1 ELSE 0 END) = 0 AS allstar
+        FROM (SELECT vis AS t, season, gametype FROM game
+              UNION ALL SELECT home, season, gametype FROM game)
         GROUP BY t, season ORDER BY t, season""").fetchall()
     path = os.path.join(DATA, "teams.json")
     write(path, {"c": ["id", "season", "league", "city", "nickname"],
                  "r": [list(r) for r in teams],
-                 "playedC": ["team", "season", "games"],
+                 "playedC": ["team", "season", "games", "allstar"],
                  "played": [list(r) for r in played]})
     report("teams.json", path, "%s team-seasons" % f"{len(teams):,}")
 

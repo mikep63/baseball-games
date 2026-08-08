@@ -459,7 +459,7 @@ async function viewPlayer(parts, q) {
     ip(psum('outs')), psum('h'), psum('r'), psum('er'), psum('bb'), psum('so'),
     psum('hr'), era(psum('er'), psum('outs'))] });
 
-  const fldRows = d.fielding.map(r => ({
+  const fldRows = d.fielding.filter(reg).map(r => ({
     cells: [r.season, r.position, r.g, ip(r.outs), n(r.po), n(r.a), n(r.e), n(r.dp)],
   }));
 
@@ -513,8 +513,32 @@ async function renderGameLog(id, season) {
   const HEAD = [{ t: 'Date', l: 1 }, { t: 'Team', l: 1 },
                 { t: 'Opponent', l: 1 }, { t: 'Score' }];
 
-  const batted = d.games.filter(g => g.ab != null);
-  const pitched = d.games.filter(g => g.p_outs != null);
+  /* A season's games include October. Totalling the World Series into the
+     regular-season line is the same mistake the team record made, and this is
+     where it would show up on a player's page, so each game type gets its own
+     section and its own totals. The games arrive in date order, so regular
+     season leads and the rounds follow in the order they were played. */
+  const byType = new Map();
+  for (const g of d.games) {
+    if (!byType.has(g.gametype)) byType.set(g.gametype, []);
+    byType.get(g.gametype).push(g);
+  }
+  const out = [];
+  for (const [type, games] of byType) {
+    const html = logTables(games, common, HEAD);
+    if (!html) continue;
+    out.push(byType.size > 1
+      ? `<h4>${esc(META.gametypes[type] || type)}</h4>${html}` : html);
+  }
+  document.getElementById('gamelog').innerHTML = out.length
+    ? `<p class="note">${d.total} games in ${season}.</p>` + out.join('')
+    : '<p class="empty">No games that season.</p>';
+}
+
+/* The batting and pitching tables for one set of games. */
+function logTables(games, common, HEAD) {
+  const batted = games.filter(g => g.ab != null);
+  const pitched = games.filter(g => g.p_outs != null);
 
   const batTotal = k => batted.reduce((a, g) => a + (g[k] || 0), 0);
   const batRows = batted.map(g => ({
@@ -540,18 +564,16 @@ async function renderGameLog(id, season) {
 
   const parts = [];
   if (batRows.length) {
-    parts.push((pitRows.length ? '<h4>Batting</h4>' : '') + table(
+    parts.push((pitRows.length ? '<h5>Batting</h5>' : '') + table(
       [...HEAD, { t: 'AB' }, { t: 'R' }, { t: 'H' }, { t: '2B' }, { t: '3B' },
        { t: 'HR' }, { t: 'RBI' }, { t: 'BB' }, { t: 'SO' }, { t: 'SB' }], batRows));
   }
   if (pitRows.length) {
-    parts.push((batRows.length ? '<h4>Pitching</h4>' : '') + table(
+    parts.push((batRows.length ? '<h5>Pitching</h5>' : '') + table(
       [...HEAD, { t: 'IP' }, { t: 'H' }, { t: 'R' }, { t: 'ER' }, { t: 'BB' },
        { t: 'SO' }, { t: 'HR' }], pitRows));
   }
-  document.getElementById('gamelog').innerHTML = parts.length
-    ? `<p class="note">${d.total} games in ${season}.</p>` + parts.join('')
-    : '<p class="empty">No games that season.</p>';
+  return parts.join('');
 }
 
 // --------------------------------------------------------------------- team
@@ -604,11 +626,25 @@ async function viewTeams(_, q) {
   const d = await api('/teams?season=' + season);
   const years = [];
   for (let y = META.lastSeason; y >= META.firstSeason; y--) years.push(y);
+  // The All-Star squads are not clubs and are kept out of the league lists,
+  // where sorting by city drops "American League All-Stars" above Anaheim.
+  // They keep a section of their own rather than being hidden: it is the only
+  // way to reach the All-Star rosters from here.
   const byLeague = {};
-  d.teams.forEach(t => (byLeague[t.league || 'Other'] = byLeague[t.league || 'Other'] || []).push(t));
-  const blocks = Object.entries(byLeague).map(([lg, ts]) => `<h3>${esc(lg)}</h3>` + table(
-    [{ t: 'Club', l: 1 }, { t: 'Games' }],
-    ts.map(t => ({ cells: [teamLink(t.id, season, `${t.city} ${t.nickname}`), t.n] })))).join('');
+  d.teams.filter(t => !t.allstar).forEach(t => {
+    const k = t.league || 'League not recorded';
+    (byLeague[k] = byLeague[k] || []).push(t);
+  });
+  const clubTable = ts => table([{ t: 'Club', l: 1 }, { t: 'Games' }],
+    ts.map(t => ({ cells: [teamLink(t.id, season, `${t.city} ${t.nickname}`), t.n] })));
+  let blocks = Object.entries(byLeague)
+    .map(([lg, ts]) => `<h3>${esc(lg)}</h3>${clubTable(ts)}`).join('');
+  const squads = d.teams.filter(t => t.allstar);
+  if (squads.length) {
+    blocks += `<h3>All-Star squads</h3>`
+      + `<p class="note">Assembled for the one game; not clubs.</p>`
+      + clubTable(squads);
+  }
   app.innerHTML = `
     <div class="controls"><label>Season<select id="t-season">${years.map(y =>
       `<option${y == season ? ' selected' : ''}>${y}</option>`).join('')}</select></label></div>

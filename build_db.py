@@ -296,17 +296,38 @@ def load_franchises(conn):
     say("franchise", len(rows))
 
 
+# Retrosheet spells the two major leagues "AL"/"NL" up to 1949 and "A"/"N"
+# from 1950. Nothing else changes, but a page grouped by league is headed
+# differently either side of that line for no reason the reader can see.
+LEAGUE_SPELLINGS = {"A": "AL", "N": "NL"}
+
+# A squad's league is not in doubt: the National League All-Stars are in the
+# National League. Retrosheet files them under the American in TEAM1997 and
+# TEAM2025 -- 2 of the 90 seasons the squad appears, against 73 filed
+# correctly -- which drops the NL side into the middle of the AL list.
+ALLSTAR_LEAGUE = {"ALS": "AL", "NLS": "NL"}
+
+
 def load_teams(conn):
     rows = []
+    corrected = 0
     for path in sorted(glob.glob(rel("teams/TEAM[0-9][0-9][0-9][0-9]"))):
         season = int(re.search(r"(\d{4})$", path).group(1))
         with open(path, newline="", encoding="latin-1") as f:
             for r in csv.reader(f):
                 if len(r) < 4:
                     continue
-                rows.append((r[0], season, text(r[1]), text(r[2]), text(r[3])))
+                league = LEAGUE_SPELLINGS.get(text(r[1]), text(r[1]))
+                right = ALLSTAR_LEAGUE.get(r[0])
+                if right and league != right:
+                    league = right
+                    corrected += 1
+                rows.append((r[0], season, league, text(r[2]), text(r[3])))
     conn.executemany("INSERT OR REPLACE INTO team VALUES(?,?,?,?,?)", rows)
     say("team season", len(rows))
+    if corrected:
+        say("league corrected", corrected, "All-Star squads filed under the wrong league")
+    return corrected
 
 
 def load_parks(conn):
@@ -627,7 +648,7 @@ def main():
     print("Reference data")
     load_people(conn)
     load_franchises(conn)
-    load_teams(conn)
+    league_fixes = load_teams(conn)
     load_parks(conn)
     load_rosters(conn)
 
@@ -642,6 +663,9 @@ def main():
     mark_coverage(conn, box_ids)
 
     problems = check_team_fixes(conn, fixed, box_ids)
+    if not league_fixes:
+        problems.append("  ALLSTAR_LEAGUE no longer changes anything -- Retrosheet has "
+                        "fixed the All-Star squads' leagues upstream. Remove it.")
 
     print("Indexing ...")
     conn.executescript(INDEXES)
