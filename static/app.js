@@ -218,7 +218,7 @@ function calendarHTML(days, selected, byResult) {
 
    Muted where Retrosheet has no box score -- 19,664 games, all but a handful
    of them before 1900. Muted but still a link, because the page behind it is
-   thin rather than empty: it has the result, the clubs and the ground for all
+   thin rather than empty: it has the result, the clubs and the park for all
    of them, an attendance for 7,198 and a line score for 2,578. Disabling the
    button would be the only way those 19,664 games could be opened at all.
 
@@ -229,7 +229,7 @@ const boxLinkHTML = (g, suffix) => {
   const title = has
     ? 'The box score, with the line score and the details'
     : 'Retrosheet has no box score for this game — the page has the result, '
-      + 'the clubs and the ground';
+      + 'the clubs and the park';
   return `<a class="pill${has ? '' : ' quiet'}" href="#/game/${g.id}" title="${
     esc(title)}">${has ? 'box' : 'game'}${esc(suffix || '')}</a>`;
 };
@@ -302,13 +302,13 @@ function seasonGamesHTML(games, total, ctx) {
 }
 
 /* The one place a games URL is built, so the three ways of changing this view
-   -- a select, a calendar cell, dropping the ground -- cannot drift apart.
+   -- a select, a calendar cell, dropping the park -- cannot drift apart.
 
-   The day and the ground are season-scoped and pass `was` to say so. Both were
+   The day and the park are season-scoped and pass `was` to say so. Both were
    chosen inside a single year: the day from a cell on that season's calendar,
-   the ground from a row on a park page reading "1923 — 79 games". Reinterpreted
+   the park from a row on a park page reading "1923 — 79 games". Reinterpreted
    against another season they answer a question nobody asked, and where the
-   ground stood idle that year they answer with an empty calendar and no
+   park stood idle that year they answer with an empty calendar and no
    control to explain it. So a change of season drops them. */
 function gamesHash({ season, team, gametype, park, date, was }) {
   const p = new URLSearchParams({ season });
@@ -354,7 +354,7 @@ async function viewGames(_, q) {
      built to stop showing. There the calendar is the whole answer, and a day
      has to be picked before there is anything to tabulate.
 
-     A ground is the same kind of filter as a club -- the busiest a park has
+     A park is the same kind of filter as a club -- the busiest a park has
      ever been in one season is 173 games, Shibe Park in 1946 with two clubs
      sharing it -- and listing its games is also what puts its name on screen,
      which is how the reader can see the filter is on at all.
@@ -393,10 +393,10 @@ async function viewGames(_, q) {
   // `total` -- once a day is picked, `total` counts that day.
   const games = data.days.reduce((a, d) => a + d[1], 0);
 
-  /* The ground has no select of its own, because it arrives from a link on a
+  /* The park has no select of its own, because it arrives from a link on a
      park page rather than being chosen here. Without something on screen the
      reader cannot see that it is filtering at all, let alone turn it off --
-     and a ground that stood idle in the season he has since moved to leaves
+     and a park that stood idle in the season he has since moved to leaves
      him staring at "0 games" with all three controls reading wide open.
 
      The name comes off the games it matched, free. Where it matched none --
@@ -417,9 +417,9 @@ async function viewGames(_, q) {
       <label>Club<select id="f-team">${teamOpts}</select></label>
       ${seasonTypes.length > 1
         ? `<label>Type<select id="f-type">${typeOpts}</select></label>` : ''}
-      ${park ? `<label>Ground<span class="ground">${esc(parkName)}<a
+      ${park ? `<label>Park<span class="parkfilter">${esc(parkName)}<a
         href="${gamesHash({ season, team, gametype, date: selected })}"
-        title="Show every ground" aria-label="Remove the ground filter">×</a></span></label>` : ''}
+        title="Show every park" aria-label="Remove the park filter">×</a></span></label>` : ''}
     </div>
     <h2>${games.toLocaleString()} games in ${season}</h2>
     <p class="note">${data.days.length

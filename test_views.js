@@ -108,20 +108,20 @@ async function main() {
       V.viewGames([], Q({ season: 1927, gametype: 'regular' })),
       h => h.includes('cal-month') && h.includes('1,236 games in 1927')
         && !h.includes('table-wrap')],
-    /* A ground narrows like a club does, and unlike a club it has no select,
+    /* A park narrows like a club does, and unlike a club it has no select,
        so the view has to name it and offer a way off it. */
-    ['games (1927) — a ground', () =>
+    ['games (1927) — a park', () =>
       V.viewGames([], Q({ season: 1927, park: 'NYC16' })),
-      h => h.includes('Yankee Stadium') && h.includes('class="ground"')
-        && h.includes('Remove the ground filter') && h.includes('table-wrap')],
-    /* The reported state, exactly: a ground carried out of its own season.
+      h => h.includes('Yankee Stadium') && h.includes('class="parkfilter"')
+        && h.includes('Remove the park filter') && h.includes('table-wrap')],
+    /* The reported state, exactly: a park carried out of its own season.
        Bloomsburg Fair Grounds played host in 1926 and never again, so 1985
-       matches nothing -- and the view has to name the ground it could find no
+       matches nothing -- and the view has to name the park it could find no
        games for, say "0 games" once rather than twice, and offer the cross. */
-    ['games (1985) — a ground with no games that season', () =>
+    ['games (1985) — a park with no games that season', () =>
       V.viewGames([], Q({ season: 1985, team: 'BAL', park: 'BLO01' })),
       h => h.includes('Bloomsburg Fair Grounds') && h.includes('0 games in 1985')
-        && h.includes('Remove the ground filter')
+        && h.includes('Remove the park filter')
         && (h.match(/No games match those filters/g) || []).length === 1],
     ['games (1927) — a day picked', () =>
       V.viewGames([], Q({ season: 1927, date: '1927-07-04' })),
@@ -141,7 +141,7 @@ async function main() {
         && h.includes('<a class="pill" href="#/game/')],
     /* 1871 has no box scores at all -- Retrosheet knows the game happened and
        who won, and nothing about who played. The button says so and stays a
-       link, because that page still carries the result and the ground. */
+       link, because that page still carries the result and the park. */
     ['games (1871) — a day with no box scores', () =>
       V.viewGames([], Q({ season: 1871, date: '1871-05-04' })),
       h => h.includes('May 4, 1871')
@@ -205,25 +205,25 @@ async function main() {
       DOW[V.weekdayOf(y, m, d)]);
   });
 
-  /* The day and the ground are season-scoped, and BLO01 is why. Bloomsburg
+  /* The day and the park are season-scoped, and BLO01 is why. Bloomsburg
      Fair Grounds hosted three Negro League games, all of them in 1926, and
      has never held another. Carried out of 1926 -- as it was, silently, with
      no control naming it and no way to switch it off -- it answers every
      other year with "0 games" while Club and Type both read wide open. */
   const held = { season: 1926, park: 'BLO01', date: '1926-09-19' };
-  check('a change of season drops the ground and the day',
+  check('a change of season drops the park and the day',
     V.gamesHash({ ...held, season: 1985, was: 1926 }) === '#/games?season=1985',
     V.gamesHash({ ...held, season: 1985, was: 1926 }));
   check('staying in the season keeps them',
     V.gamesHash({ ...held, was: 1926 })
       === '#/games?season=1926&park=BLO01&date=1926-09-19',
     V.gamesHash({ ...held, was: 1926 }));
-  // The cross beside the ground: the same query, minus the ground.
-  check('the ground can be taken off',
+  // The cross beside the park: the same query, minus the park.
+  check('the park can be taken off',
     V.gamesHash({ season: 1926, date: '1926-09-19' })
       === '#/games?season=1926&date=1926-09-19');
   // No `was` means no change of season is in play -- a calendar click, say.
-  check('a day can be set without the ground being dropped',
+  check('a day can be set without the park being dropped',
     V.gamesHash({ season: 1926, park: 'BLO01', date: '1926-09-20' })
       === '#/games?season=1926&park=BLO01&date=1926-09-20');
   // A club survives a change of season; only the two season-scoped ones go.
