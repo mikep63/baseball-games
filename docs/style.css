@@ -110,6 +110,102 @@ ul.events .k { color: var(--muted); flex: 0 0 7.5rem; }
   ul.events .k { display: block; font-size: .78rem; }
 }
 
+/* ------------------------------------------------------------- the calendar
+   A season laid out a month to a grid. The months flow rather than sit in a
+   fixed number of columns, because a season is anywhere from four months
+   (1871's tail) to twelve (1926, which played on into December). */
+.calendar {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 1.1rem 1.5rem; margin-bottom: .3rem;
+}
+.cal-month h4 {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin: 0 0 .25rem; padding-bottom: .15rem; border-bottom: 1px solid var(--line);
+  font-size: .82rem; letter-spacing: .06em; text-transform: uppercase;
+}
+.cal-month h4 i { font-style: normal; color: var(--muted); font-size: .78rem; }
+/* minmax(0, 1fr), not 1fr: a bare 1fr track refuses to shrink below its
+   content, and "16" set bold in a cell is wider than a seventh of a narrow
+   month. The tracks then push the grid past the page and take the legend and
+   the footer sideways with them. min-width on the month is the same guard one
+   level up. */
+.cal-month { min-width: 0; }
+.cal-dow, .cal-grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px;
+}
+.cal-dow span { text-align: center; font-size: .62rem; color: var(--muted); line-height: 1.8; }
+
+.cal-day {
+  position: relative; aspect-ratio: 1 / .92; min-height: 30px; padding: 0;
+  border: 1px solid transparent; border-radius: 3px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-family: inherit;
+}
+.cal-day .dnum {
+  position: absolute; top: 1px; left: 3px; line-height: 1;
+  font-size: .55rem; color: var(--muted); opacity: .8;
+}
+/* The glyph is the answer -- the number of games, or W/L/T. The tint only
+   repeats it, so a reader who cannot separate the tints loses nothing. */
+.cal-day .glyph { font-size: .78rem; font-weight: bold; line-height: 1; }
+/* Small enough for the three letters of the eleven tripleheaders on record. */
+.cal-day.dh .glyph { font-size: .55rem; letter-spacing: .02em; }
+.cal-day.pad { visibility: hidden; }
+.cal-day.off {
+  border-color: var(--line);
+  background: repeating-linear-gradient(-45deg, transparent 0 3px, rgba(107,107,98,.09) 3px 4px);
+}
+.cal-day.off .dnum { opacity: .45; }
+button.cal-day { cursor: pointer; }
+button.cal-day:hover { border-color: var(--green); }
+button.cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cal-day.sel { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); z-index: 1; }
+
+/* Fixed thresholds: 1–2, 3–5, 6–8, 9–11, 12+ games in the day. */
+.b1 { background: #e8eee6; color: #33513f; border-color: #dbe4d8; }
+.b2 { background: #c8dacb; color: #29483a; border-color: #b9cebd; }
+.b3 { background: #9cbfa7; color: #1c3c2d; border-color: #8db399; }
+.b4 { background: #5f8d77; color: #f2f6f0; border-color: #547f6b; }
+.b5 { background: #23543f; color: #f2f6f0; border-color: #1b452f; }
+.b4 .dnum, .b5 .dnum { color: #dfe8dc; opacity: .8; }
+
+/* Won, lost, tied -- the same green and rust the schedules and the pitching
+   decisions already use, so a result reads the same wherever it appears. */
+.r-W { --res: #d8e5da; background: var(--res); color: var(--green); border-color: #c3d6c8; }
+.r-L { --res: #f2dcd4; background: var(--res); color: #96331f; border-color: #e6c9bf; }
+.r-T { --res: #e6e2d6; background: var(--res); color: #55534a; border-color: #d8d3c4; }
+
+/* A doubleheader split one apiece is half the day's colour and half the
+   other's; filling it with the first game's would call the afternoon a win. */
+.cal-day.dh {
+  background: linear-gradient(90deg, var(--res) 0 50%, var(--res2, var(--res)) 50%);
+  color: var(--ink); border-color: var(--line);
+}
+.cal-day.dh2-W { --res2: #d8e5da; }
+.cal-day.dh2-L { --res2: #f2dcd4; }
+.cal-day.dh2-T { --res2: #e6e2d6; }
+
+.cal-key {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1rem;
+  font-size: .75rem; color: var(--muted); margin: .9rem 0 .2rem;
+}
+.cal-key .key-item { display: flex; align-items: center; gap: .28rem; }
+.cal-key .key-sw {
+  width: 18px; height: 15px; border-radius: 2px; border: 1px solid transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .58rem; font-weight: bold;
+}
+.cal-key .key-sw.off { background: var(--row-alt); border-color: var(--line); }
+
+.dayview { margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+.dayview h3 { margin-top: 0; }
+
+/* One month to a row on a phone. Two would fit, at about 24px a cell, and a
+   24px target is not one you can hit with a thumb. */
+@media (max-width: 600px) {
+  .calendar { grid-template-columns: 1fr; gap: 1.1rem; }
+}
+
 .empty { color: var(--muted); padding: 1.2rem 0; }
 .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 1.5rem; }
 

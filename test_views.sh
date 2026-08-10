@@ -19,11 +19,16 @@ SERVER=$!
 trap 'kill $SERVER 2>/dev/null' EXIT
 sleep 2
 
+# The three games URLs are the three requests viewGames actually makes, spelt
+# exactly as it spells them -- the fixture is looked up by URL, so limit=0 (the
+# calendar with no day picked) has to be recorded as limit=0.
 mkdir -p fixtures
 for u in \
   "meta" \
   "teams?season=1927" \
-  "games?season=1927&limit=400" \
+  "games?season=1927&limit=0" \
+  "games?season=1927&limit=0&team=NY1" \
+  "games?season=1927&limit=400&date=1927-07-04" \
   "game/NYA195610080" \
   "player/ruthb101" \
   "player/ruthb101/games?season=1927" \

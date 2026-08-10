@@ -182,6 +182,33 @@ window.LocalAPI = (function () {
     })) };
   }
 
+  /* app.py's _day_counts, over the shard. The list handed in must be the one
+     every filter *except* `date` has narrowed: the calendar is what the reader
+     picks a day with, and a calendar narrowed by his own pick is one cell.
+
+     The shard is exported ORDER BY date, number, id, which is the order app.py
+     reads the games back in, so the W/L string comes out the same both sides. */
+  function dayCounts(list, team) {
+    const out = [];
+    for (const g of list) {
+      let res = '';
+      if (team) {
+        const home = g.home === team;
+        const us = home ? g.home_score : g.vis_score;
+        const them = home ? g.vis_score : g.home_score;
+        res = (us == null || them == null) ? '?'
+          : us > them ? 'W' : us < them ? 'L' : 'T';
+      }
+      const last = out[out.length - 1];
+      if (!last || last[0] !== g.date) { out.push(team ? [g.date, 1, res] : [g.date, 1]); continue; }
+      last[1]++;
+      // Guarded: with no club there is no third element, and `undefined + ''`
+      // would quietly put the string "undefined" there instead.
+      if (team) last[2] += res;
+    }
+    return out;
+  }
+
   async function gamesList(q) {
     const yr = Number(q.get('season')) || (await meta()).lastSeason;
     const s = await shard(yr);
@@ -191,13 +218,17 @@ window.LocalAPI = (function () {
     let list = s.games.filter(g =>
       (!team || g.vis === team || g.home === team) &&
       (!type || g.gametype === type) &&
-      (!date || g.date === date) &&
       (!park || g.park === park) &&
       (!from || g.date >= from) && (!to || g.date <= to));
+    const days = dayCounts(list, team);
+    if (date) list = list.filter(g => g.date === date);
     const total = list.length;
-    const limit = Math.min(Number(q.get('limit')) || 200, 1000);
+    // Number('0') is falsy, so `|| 200` would quietly turn the calendar-only
+    // request into a request for 200 games nobody is going to look at.
+    const asked = Number(q.get('limit'));
+    const limit = Math.min(Number.isFinite(asked) && asked >= 0 ? asked : 200, 1000);
     list = list.slice(0, limit).map(g => Object.assign({}, g));
-    return { games: await decorate(list), total, shown: list.length };
+    return { games: await decorate(list), total, shown: list.length, days };
   }
 
   async function teamsList(q) {

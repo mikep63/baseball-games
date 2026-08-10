@@ -27,12 +27,13 @@ function ip(outs) {
   return Math.floor(outs / 3) + '.' + (outs % 3);
 }
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+  'August', 'September', 'October', 'November', 'December'];
+
 function niceDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-').map(Number);
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-    'August', 'September', 'October', 'November', 'December'];
-  return `${months[m - 1]} ${d}, ${y}`;
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
 }
 
 /* One frontend, two backings. The docs/ build loads api-local.js, which
@@ -83,6 +84,17 @@ const ROUTES = {
   about: viewAbout,
 };
 
+/* Where the reader is, ignoring which day he has picked. Picking a day on the
+   games calendar is a hash change like any other, and scrolling him back to
+   the top would throw him off the control he just used -- the calendar is
+   above the day's games, so the jump lands nowhere useful. Moving to another
+   view, or changing a filter, still earns the scroll. */
+function placeOf(parts, q) {
+  return parts.join('/') + '|' + ['season', 'team', 'gametype', 'park', 'q']
+    .map(k => q.get(k) || '').join('|');
+}
+let lastPlace = null;
+
 async function route() {
   const { parts, q } = parseHash();
   const view = ROUTES[parts[0]] || viewGames;
@@ -94,7 +106,141 @@ async function route() {
   } catch (e) {
     app.innerHTML = `<p class="empty">Couldn’t load that: ${esc(e.message)}</p>`;
   }
-  window.scrollTo(0, 0);
+  const place = placeOf(parts, q);
+  if (place !== lastPlace) window.scrollTo(0, 0);
+  lastPlace = place;
+}
+
+// ------------------------------------------------------------- the calendar
+
+/* Dates are strings throughout this app and stay strings, because
+   new Date('2025-07-04') is UTC midnight and prints as the 3rd everywhere
+   west of Greenwich. The calendar is the one place that needs real date
+   arithmetic -- where a month's first day falls in the week, and how long
+   the month is -- and it asks for that in UTC for the same reason.
+   Retrosheet's own game.dow is what the tests check this against. */
+const weekdayOf = (y, m, d) => new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+const daysInMonth = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+
+/* Every month from the first game to the last, inclusive, derived rather than
+   assumed to be April to October: 1926 runs January to December, because the
+   Negro League clubs played winter ball in Puerto Rico. */
+function monthsBetween(first, last) {
+  const out = [];
+  let y = +first.slice(0, 4), m = +first.slice(5, 7);
+  const ey = +last.slice(0, 4), em = +last.slice(5, 7);
+  while (y < ey || (y === ey && m <= em)) {
+    out.push([y, m]);
+    if (++m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+/* Fixed thresholds, not scaled to each season's own busiest day. A ramp that
+   renormalised would paint 1871's lone Thursday game the same shade as a
+   fifteen-game Sunday in 2025, and the difference between those is most of
+   what a hundred and fifty years of calendars has to say. */
+const dayBucket = n => (n >= 12 ? 5 : n >= 9 ? 4 : n >= 6 ? 3 : n >= 3 ? 2 : 1);
+
+const DOW_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const RESULT_WORDS = { W: 'won', L: 'lost', T: 'tied' };
+
+function calendarKeyHTML(byResult) {
+  const item = (sw, label) => `<span class="key-item">${sw}${label}</span>`;
+  const sw = (cls, text) => `<span class="key-sw ${cls}">${text || ''}</span>`;
+  if (byResult) {
+    return '<p class="cal-key">'
+      + ['W', 'L', 'T'].map(r => item(sw('r-' + r, r), RESULT_WORDS[r])).join('')
+      + item(sw('r-W', 'W') + sw('r-L', 'L'), 'doubleheader')
+      + item(sw('off'), 'no game') + '</p>';
+  }
+  return '<p class="cal-key"><span class="key-item">Games</span>'
+    + ['1–2', '3–5', '6–8', '9–11', '12+']
+      .map((l, i) => item(sw('b' + (i + 1)), l)).join('')
+    + item(sw('off'), 'none') + '</p>';
+}
+
+/* The whole season at once, a month to a grid. A month at a time would cost
+   seven clicks to sweep a season and show nothing you did not already know;
+   laid out together, the shape of the season is itself the answer -- the
+   All-Star hole in July, October narrowing to a thread, 1994 stopping dead
+   on the 11th of August. */
+/* `byResult` is passed in rather than sniffed off the payload. Reading it back
+   out of the rows -- days[0].length > 2 -- looked tidier and was one stray
+   `undefined + ''` away from rendering a season of results that were never
+   sent. The caller knows whether it asked for a club; it can say so. */
+function calendarHTML(days, selected, byResult) {
+  if (!days.length) return '<p class="empty">No games match those filters.</p>';
+  const by = new Map(days.map(d => [d[0], d]));
+  const months = monthsBetween(days[0][0], days[days.length - 1][0])
+    .map(([y, m]) => {
+      const lead = weekdayOf(y, m, 1);
+      const cells = [];
+      let played = 0;
+      for (let i = 0; i < lead; i++) cells.push('<span class="cal-day pad"></span>');
+      for (let d = 1; d <= daysInMonth(y, m); d++) {
+        const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const e = by.get(iso);
+        if (!e) {
+          cells.push(`<span class="cal-day off"><span class="dnum">${d}</span></span>`);
+          continue;
+        }
+        played += e[1];
+        const results = byResult ? e[2].split('') : [];
+        const label = `${niceDate(iso)} — ` + (byResult
+          ? results.map(r => RESULT_WORDS[r] || 'played').join(', ')
+          : `${e[1]} ${e[1] === 1 ? 'game' : 'games'}`);
+        // The glyph, not the tint, is what carries the answer: a grid told
+        // apart by colour alone is a grid of identical squares to about one
+        // man in twelve.
+        cells.push(`<button type="button" data-date="${iso}" title="${esc(label)}"`
+          + ` aria-label="${esc(label)}"${iso === selected ? ' aria-current="date"' : ''}`
+          + ` class="cal-day ${byResult ? 'r-' + results[0] : 'b' + dayBucket(e[1])}`
+          // A doubleheader split won and lost is half green and half rust, so
+          // the cell cannot read as a win at a glance the way a filled one does.
+          + `${results.length > 1 ? ' dh dh2-' + results[1] : ''}`
+          + `${iso === selected ? ' sel' : ''}">`
+          + `<span class="dnum">${d}</span>`
+          + `<span class="glyph">${byResult ? results.join(' ') : e[1]}</span></button>`);
+      }
+      return `<div class="cal-month"><h4>${MONTHS[m - 1]}<i>${played}</i></h4>`
+        + `<div class="cal-dow" aria-hidden="true">${
+          DOW_INITIALS.map(x => `<span>${x}</span>`).join('')}</div>`
+        + `<div class="cal-grid">${cells.join('')}</div></div>`;
+    }).join('');
+  return `<div class="calendar" id="calendar">${months}</div>`
+    + calendarKeyHTML(byResult);
+}
+
+/* The games of the chosen day. No Date column: the heading above it is the
+   date, and repeating it in every row says nothing. The link stays where the
+   date used to be, and carries the doubleheader number, which is the one
+   thing that does still tell the two rows apart. */
+function dayGamesHTML(date, games) {
+  const rows = games.map(g => ({
+    cells: [
+      gameLink(g.id, g.number !== '0' ? `Game ${g.number}` : 'Game'),
+      teamLink(g.vis, g.season, g.visName),
+      n(g.vis_score),
+      teamLink(g.home, g.season, g.homeName),
+      n(g.home_score),
+      g.parkName ? link('#/park/' + g.park, g.parkName) : '',
+      g.attendance ? g.attendance.toLocaleString() : '',
+      // What Retrosheet holds for this game, not something to click. Both are
+      // quiet for that reason: a filled pill reads as a button, and the
+      // play-by-play isn't a view yet.
+      (g.has_box ? '<span class="pill quiet" title="Retrosheet has a full box'
+        + ' score for this game">box</span>' : '')
+      + (g.has_pbp ? '<span class="pill quiet" title="Retrosheet has a'
+        + ' pitch-by-pitch account of this game. Not shown here yet.">plays</span>' : ''),
+    ],
+  }));
+  return `<div class="dayview"><h3>${niceDate(date)}</h3>
+    <p class="note">${games.length} ${games.length === 1 ? 'game' : 'games'}</p>
+    ${table([{ t: 'Game', l: 1 }, { t: 'Visitor', l: 1 }, { t: 'R' },
+             { t: 'Home', l: 1 }, { t: 'R' }, { t: 'Park', l: 1 },
+             { t: 'Attendance' }, { t: 'On file', l: 1 }], rows,
+            { empty: 'No games that day.' })}</div>`;
 }
 
 // --------------------------------------------------------------- game finder
@@ -120,12 +266,23 @@ async function viewGames(_, q) {
   if (!seasonTypes.includes(gametype)) gametype = '';
 
   const teams = (await api('/teams?season=' + season)).teams;
-  const params = new URLSearchParams({ season, limit: 400 });
+  /* With no day picked there is no table under the calendar, so there are no
+     rows worth asking for -- a modern season would otherwise put 400 games on
+     the wire to be thrown away before the first paint. A day has never held
+     more than 27. */
+  const params = new URLSearchParams({ season, limit: date ? 400 : 0 });
   if (team) params.set('team', team);
   if (gametype) params.set('gametype', gametype);
   if (date) params.set('date', date);
   if (park) params.set('park', park);
   const data = await api('/games?' + params);
+
+  /* A day carried in on the URL may have no games under the filters now in
+     force -- pick a club that was idle that afternoon and the cell is not
+     there to select. Drop the selection rather than show an empty table
+     beneath a calendar with nothing highlighted in it. */
+  const selected = data.days.some(d => d[0] === date) ? date : '';
+
   const typeOpts = ['<option value="">Any</option>'].concat(
     seasonTypes.map(k =>
       `<option value="${k}"${k === gametype ? ' selected' : ''}>${
@@ -136,24 +293,9 @@ async function viewGames(_, q) {
   const years = [];
   for (let y = META.lastSeason; y >= META.firstSeason; y--) years.push(y);
 
-  const rows = data.games.map(g => ({
-    cells: [
-      gameLink(g.id, niceDate(g.date) + (g.number !== '0' ? ` (${g.number})` : '')),
-      teamLink(g.vis, g.season, g.visName),
-      n(g.vis_score),
-      teamLink(g.home, g.season, g.homeName),
-      n(g.home_score),
-      g.parkName ? link('#/park/' + g.park, g.parkName) : '',
-      g.attendance ? g.attendance.toLocaleString() : '',
-      // What Retrosheet holds for this game, not something to click. Both are
-      // quiet for that reason: a filled pill reads as a button, and the
-      // play-by-play isn't a view yet.
-      (g.has_box ? '<span class="pill quiet" title="Retrosheet has a full box'
-        + ' score for this game">box</span>' : '')
-      + (g.has_pbp ? '<span class="pill quiet" title="Retrosheet has a'
-        + ' pitch-by-pitch account of this game. Not shown here yet.">plays</span>' : ''),
-    ],
-  }));
+  // The season's own total, summed off the calendar rather than read from
+  // `total` -- once a day is picked, `total` counts that day.
+  const games = data.days.reduce((a, d) => a + d[1], 0);
 
   app.innerHTML = `
     <div class="controls">
@@ -162,29 +304,46 @@ async function viewGames(_, q) {
       <label>Club<select id="f-team">${teamOpts}</select></label>
       ${seasonTypes.length > 1
         ? `<label>Type<select id="f-type">${typeOpts}</select></label>` : ''}
-      <label>Date<input type="date" id="f-date" value="${esc(date)}"></label>
     </div>
-    <h2>${data.total.toLocaleString()} games${team ? '' : ` in ${season}`}</h2>
-    <p class="note">${data.shown < data.total
-      ? `Showing the first ${data.shown.toLocaleString()}.` : ''}</p>
-    ${table([{ t: 'Date', l: 1 }, { t: 'Visitor', l: 1 }, { t: 'R' },
-             { t: 'Home', l: 1 }, { t: 'R' }, { t: 'Park', l: 1 },
-             { t: 'Attendance' }, { t: 'On file', l: 1 }], rows,
-            { empty: 'No games match those filters.' })}`;
+    <h2>${games.toLocaleString()} games in ${season}</h2>
+    <p class="note">${data.days.length
+      ? `${data.days.length} ${data.days.length === 1 ? 'day' : 'days'}, ${
+        niceDate(data.days[0][0])} to ${niceDate(data.days[data.days.length - 1][0])}.`
+      : ''}</p>
+    ${calendarHTML(data.days, selected, !!team)}
+    ${selected ? dayGamesHTML(selected, data.games) : ''}`;
 
   const go = () => {
     const p = new URLSearchParams({ season: val('f-season') });
     if (val('f-team')) p.set('team', val('f-team'));
     const t = document.getElementById('f-type');
     if (t && t.value) p.set('gametype', t.value);
-    if (val('f-date')) p.set('date', val('f-date'));
     if (park) p.set('park', park);
+    /* A day belongs to the season it was picked in. Carrying it across a
+       change of season is how ?season=1927&date=2025-07-04 used to arise:
+       an empty table under two filters that both read perfectly sensibly. */
+    if (selected && String(val('f-season')) === String(season)) p.set('date', selected);
     location.hash = '#/games?' + p;
   };
-  ['f-season', 'f-team', 'f-type', 'f-date'].forEach(id => {
+  ['f-season', 'f-team', 'f-type'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', go);
   });
+
+  const cal = document.getElementById('calendar');
+  if (cal) {
+    cal.addEventListener('click', ev => {
+      const cell = ev.target.closest('button[data-date]');
+      if (!cell) return;
+      const p = new URLSearchParams(location.hash.split('?')[1] || '');
+      p.set('season', season);
+      // Clicking the day already open puts it away again. The calendar is its
+      // own deselect, so there is no third control to explain.
+      if (cell.dataset.date === selected) p.delete('date');
+      else p.set('date', cell.dataset.date);
+      location.hash = '#/games?' + p;
+    });
+  }
 }
 
 const val = id => document.getElementById(id).value;

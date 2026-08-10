@@ -77,7 +77,8 @@ function loadApp() {
   const cut = src.indexOf('// --------------------------------------------------------------------- boot');
   const body = src.slice(0, cut);
   return new Function(body + '\nreturn {viewGames, viewGame, viewPlayer, viewTeam, ' +
-    'viewTeams, viewDay, viewPark, viewSearch, viewAbout, setMeta: m => { META = m; }};')();
+    'viewTeams, viewDay, viewPark, viewSearch, viewAbout, ' +
+    'weekdayOf, monthsBetween, dayBucket, setMeta: m => { META = m; }};')();
 }
 
 // tiny URLSearchParams stand-in for the query objects the router passes in
@@ -90,8 +91,25 @@ async function main() {
   V.setMeta(JSON.parse(readFile(FIX + 'meta.json')));
 
   const cases = [
-    ['games (1927)', () => V.viewGames([], Q({ season: 1927 })),
-      h => h.includes('games') && h.includes('New York Yankees')],
+    /* The calendar with nothing picked. 1927 ran 12 April to 30 October, so
+       the strip is seven months; April starts on a Friday, which puts five
+       blanks before the 1st. Neither is asserted here beyond the month names
+       -- the arithmetic is checked below, against Retrosheet's own dow. */
+    ['games (1927) — calendar', () => V.viewGames([], Q({ season: 1927 })),
+      // No day picked, so no game table at all -- the calendar is the page.
+      h => h.includes('cal-month') && h.includes('April') && h.includes('October')
+        && h.includes('1,275 games in 1927') && h.includes('190 days')
+        && !h.includes('table-wrap')],
+    ['games (1927) — a day picked', () =>
+      V.viewGames([], Q({ season: 1927, date: '1927-07-04' })),
+      h => h.includes('July 4, 1927') && h.includes('16 games')
+        && h.includes('New York Yankees') && h.includes('aria-current="date"')],
+    /* A club turns the counts into results. The 1927 Giants played 155 games
+       over 27 doubleheader days and tied one, so this one fixture carries
+       every branch of the result cell. */
+    ['games (1927) — a club', () => V.viewGames([], Q({ season: 1927, team: 'NY1' })),
+      h => h.includes('155 games in 1927') && h.includes('r-W') && h.includes('r-L')
+        && h.includes('r-T') && h.includes(' dh') && h.includes('doubleheader')],
     ['game — Larsen perfect game', () => V.viewGame(['NYA195610080']),
       h => h.includes('Don Larsen') && h.includes('linescore') && h.includes('Yankee Stadium')],
     ['player — Ruth, no season', () => V.viewPlayer(['ruthb101'], Q({})),
@@ -125,8 +143,33 @@ async function main() {
     }
   }
 
+  /* Calendar arithmetic, checked against Retrosheet rather than against
+     itself: game.dow is recorded per game in the database, and these are the
+     values it holds. This is the guard on the one bug this code is most
+     likely to grow -- new Date('1927-07-04') is UTC midnight, so a naive
+     implementation puts the 4th of July 1927 on the Sunday. */
+  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  [['1871-05-04', 'Thu'], ['1927-04-12', 'Tue'], ['1927-07-04', 'Mon'],
+   ['1956-10-08', 'Mon'], ['2025-11-01', 'Sat']].forEach(([iso, dow]) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    check(`${iso} is a ${dow}`, DOW[V.weekdayOf(y, m, d)] === dow,
+      DOW[V.weekdayOf(y, m, d)]);
+  });
+
+  // 1926's Negro League clubs played winter ball, so its strip is twelve
+  // months. A hardcoded April-to-October would drop both ends of it.
+  check('1926 spans twelve months',
+    V.monthsBetween('1926-01-01', '1926-12-26').length === 12,
+    V.monthsBetween('1926-01-01', '1926-12-26').length);
+  check('1927 spans seven months',
+    V.monthsBetween('1927-04-12', '1927-10-30').length === 7,
+    V.monthsBetween('1927-04-12', '1927-10-30').length);
+  // 27 games on 18 July 1943 is the busiest day Retrosheet has.
+  check('the ramp tops out at 12 and stays there',
+    V.dayBucket(12) === 5 && V.dayBucket(27) === 5 && V.dayBucket(1) === 1);
+
   print('');
-  print(failures ? `${failures} of ${checks} failed` : `all ${checks} views render`);
+  print(failures ? `${failures} of ${checks} failed` : `all ${checks} checks pass`);
   if (failures) throw new Error('view tests failed');
 }
 

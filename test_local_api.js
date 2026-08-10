@@ -141,12 +141,43 @@ async function main() {
   compare('/team/NYA', await API.get('/team/NYA'), fixture('team_NYA'),
     rowPaths('seasons', 20, ['season', 'n']));
 
-  // --- the game finder
-  compare('/games?season=1927', await API.get('/games?season=1927&limit=400'),
-    fixture('games_season_1927_limit_400'),
-    ['total', 'shown', ...rowPaths('games', 25, ['id', 'date', 'vis', 'home',
-      'visName', 'homeName', 'vis_score', 'home_score', 'parkName', 'attendance',
-      'has_box', 'has_pbp'])]);
+  /* --- the game finder, in the three shapes viewGames asks for it in.
+
+     The calendar is the half most likely to drift, because app.py builds it
+     with a GROUP BY and api-local.js builds it with a loop over the shard.
+     The counts are compared day by day, and with a club chosen so are the
+     W/L/T strings -- which is also the only place either implementation has
+     to agree about the order two games of a doubleheader were played in. */
+  const days = (n, keys) => rowPaths('days', n, keys);
+
+  /* The third field is compared even here, where neither side should have
+     one: `undefined + ''` is the string "undefined", so a day of two games
+     is exactly where a results field grows that nobody asked for. Comparing
+     only [0] and [1] let that through once already. */
+  compare('/games?season=1927 (calendar only)',
+    await API.get('/games?season=1927&limit=0'),
+    fixture('games_season_1927_limit_0'),
+    ['total', 'shown', 'days.length', ...days(60, ['0', '1', '2'])]);
+
+  compare('/games?season=1927&team=NY1 (results)',
+    await API.get('/games?season=1927&limit=0&team=NY1'),
+    fixture('games_season_1927_limit_0_team_NY1'),
+    ['total', 'shown', 'days.length', ...days(60, ['0', '1', '2'])]);
+
+  compare('/games?season=1927&date=1927-07-04',
+    await API.get('/games?season=1927&limit=400&date=1927-07-04'),
+    fixture('games_season_1927_limit_400_date_1927-07-04'),
+    ['total', 'shown', 'days.length',
+     ...rowPaths('games', 16, ['id', 'date', 'vis', 'home', 'visName', 'homeName',
+       'vis_score', 'home_score', 'parkName', 'attendance', 'has_box', 'has_pbp'])]);
+
+  /* The regression this design is most exposed to: `date` narrows the games
+     but must not narrow the calendar, or picking a day destroys the control
+     the reader picked it with. 1927 played on 154 days either way. */
+  const picked = await API.get('/games?season=1927&limit=400&date=1927-07-04');
+  const whole = await API.get('/games?season=1927&limit=0');
+  compare('picking a day leaves the calendar whole',
+    { n: picked.days.length }, { n: whole.days.length }, ['n']);
 
   // --- a day and a park
   compare('/day/1956-10-08', await API.get('/day/1956-10-08'), fixture('day_1956-10-08'),

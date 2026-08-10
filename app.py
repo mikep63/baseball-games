@@ -195,13 +195,46 @@ def _decorate_games(conn, gs):
     return gs
 
 
+def _day_counts(conn, where, params, team):
+    """The calendar: the same filter, grouped by date.
+
+    Note what is *not* in `where` -- the caller withholds the `date` clause.
+    The calendar is the control the reader picks a day with, so narrowing it
+    by the day he picked would collapse it to the single cell he just
+    clicked, leaving him no way back.
+
+    With a club chosen the count is always one, or two on a doubleheader, so
+    a bare number tells him nothing he cannot already see. The day carries
+    W/L/T instead, in the order the games were played.
+    """
+    clause = "".join(" AND " + w for w in where)
+    if not team:
+        return [[r["date"], r["n"]] for r in conn.execute(
+            "SELECT g.date date, COUNT(*) n FROM game g WHERE 1=1" + clause
+            + " GROUP BY g.date ORDER BY g.date", params)]
+    out = []
+    for r in conn.execute(
+            "SELECT g.date, g.home, g.vis_score, g.home_score FROM game g"
+            " WHERE 1=1" + clause + " ORDER BY g.date, g.number, g.id", params):
+        us, them = ((r["home_score"], r["vis_score"]) if r["home"] == team
+                    else (r["vis_score"], r["home_score"]))
+        if us is None or them is None:
+            res = "?"
+        else:
+            res = "W" if us > them else "L" if us < them else "T"
+        if out and out[-1][0] == r["date"]:
+            out[-1][1] += 1
+            out[-1][2] += res
+        else:
+            out.append([r["date"], 1, res])
+    return out
+
+
 def api_games(q, conn):
     """The game finder: any combination of season, team, park, date, type."""
     where, params = [], []
     if arg(q, "season"):
         where.append("g.season = ?"); params.append(intarg(q, "season"))
-    if arg(q, "date"):
-        where.append("g.date = ?"); params.append(arg(q, "date"))
     if arg(q, "from"):
         where.append("g.date >= ?"); params.append(arg(q, "from"))
     if arg(q, "to"):
@@ -213,13 +246,20 @@ def api_games(q, conn):
         where.append("g.park = ?"); params.append(arg(q, "park"))
     if arg(q, "gametype"):
         where.append("g.gametype = ?"); params.append(arg(q, "gametype"))
+    # Everything above narrows the calendar too. `date` is the one filter that
+    # must not, so it goes on last and the calendar is built from the clauses
+    # standing before it.
+    days = _day_counts(conn, where, params, arg(q, "team"))
+    if arg(q, "date"):
+        where.append("g.date = ?"); params.append(arg(q, "date"))
     limit = min(intarg(q, "limit", 200), 1000)
     sql = GAME_LIST_SQL + "".join(" AND " + w for w in where) + \
         " ORDER BY g.date, g.number, g.id LIMIT ?"
     gs = rows(conn.execute(sql, params + [limit]))
     total = one(conn.execute("SELECT COUNT(*) n FROM game g WHERE 1=1"
                              + "".join(" AND " + w for w in where), params))["n"]
-    return {"games": _decorate_games(conn, gs), "total": total, "shown": len(gs)}
+    return {"games": _decorate_games(conn, gs), "total": total,
+            "shown": len(gs), "days": days}
 
 
 def api_game(gid, conn):
