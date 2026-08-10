@@ -272,6 +272,25 @@ function seasonGamesHTML(games, total) {
             { empty: 'No games match those filters.' })}</div>`;
 }
 
+/* The one place a games URL is built, so the three ways of changing this view
+   -- a select, a calendar cell, dropping the ground -- cannot drift apart.
+
+   The day and the ground are season-scoped and pass `was` to say so. Both were
+   chosen inside a single year: the day from a cell on that season's calendar,
+   the ground from a row on a park page reading "1923 — 79 games". Reinterpreted
+   against another season they answer a question nobody asked, and where the
+   ground stood idle that year they answer with an empty calendar and no
+   control to explain it. So a change of season drops them. */
+function gamesHash({ season, team, gametype, park, date, was }) {
+  const p = new URLSearchParams({ season });
+  if (team) p.set('team', team);
+  if (gametype) p.set('gametype', gametype);
+  const sameSeason = was === undefined || String(season) === String(was);
+  if (park && sameSeason) p.set('park', park);
+  if (date && sameSeason) p.set('date', date);
+  return '#/games?' + p;
+}
+
 // --------------------------------------------------------------- game finder
 
 async function viewGames(_, q) {
@@ -306,9 +325,14 @@ async function viewGames(_, q) {
      built to stop showing. There the calendar is the whole answer, and a day
      has to be picked before there is anything to tabulate.
 
+     A ground is the same kind of filter as a club -- the busiest a park has
+     ever been in one season is 173 games, Shibe Park in 1946 with two clubs
+     sharing it -- and listing its games is also what puts its name on screen,
+     which is how the reader can see the filter is on at all.
+
      Regular season counts as no filter at all: in 123 of the 155 seasons it
      is all but a handful of the games, so choosing it narrows nothing. */
-  const narrow = !!team || (gametype !== '' && gametype !== 'regular');
+  const narrow = !!team || !!park || (gametype !== '' && gametype !== 'regular');
   const wantList = !!date || narrow;
   /* 400 covers the widest of those with room to spare, and asking for none is
      what keeps the calendar-only view from putting rows on the wire that
@@ -340,6 +364,23 @@ async function viewGames(_, q) {
   // `total` -- once a day is picked, `total` counts that day.
   const games = data.days.reduce((a, d) => a + d[1], 0);
 
+  /* The ground has no select of its own, because it arrives from a link on a
+     park page rather than being chosen here. Without something on screen the
+     reader cannot see that it is filtering at all, let alone turn it off --
+     and a ground that stood idle in the season he has since moved to leaves
+     him staring at "0 games" with all three controls reading wide open.
+
+     The name comes off the games it matched, free. Where it matched none --
+     which is precisely the state most in need of explaining, a season of "0
+     games" under three controls reading wide open -- there is no name among
+     them to read, so the park page is asked for it. One request, only in the
+     case that would otherwise put a bare code on screen. */
+  let parkName = park ? ((data.games.find(g => g.parkName) || {}).parkName || '') : '';
+  if (park && !parkName) {
+    try { parkName = (await api('/park/' + park)).park.name; }
+    catch (e) { parkName = park; }
+  }
+
   app.innerHTML = `
     <div class="controls">
       <label>Season<select id="f-season">${years.map(y =>
@@ -347,6 +388,9 @@ async function viewGames(_, q) {
       <label>Club<select id="f-team">${teamOpts}</select></label>
       ${seasonTypes.length > 1
         ? `<label>Type<select id="f-type">${typeOpts}</select></label>` : ''}
+      ${park ? `<label>Ground<span class="ground">${esc(parkName)}<a
+        href="${gamesHash({ season, team, gametype, date: selected })}"
+        title="Show every ground" aria-label="Remove the ground filter">×</a></span></label>` : ''}
     </div>
     <h2>${games.toLocaleString()} games in ${season}</h2>
     <p class="note">${data.days.length
@@ -355,19 +399,14 @@ async function viewGames(_, q) {
       : ''}</p>
     ${calendarHTML(data.days, selected, !!team)}
     ${selected ? dayGamesHTML(selected, data.games)
-      : narrow ? seasonGamesHTML(data.games, data.total) : ''}`;
+      : (narrow && data.days.length) ? seasonGamesHTML(data.games, data.total) : ''}`;
 
   const go = () => {
-    const p = new URLSearchParams({ season: val('f-season') });
-    if (val('f-team')) p.set('team', val('f-team'));
     const t = document.getElementById('f-type');
-    if (t && t.value) p.set('gametype', t.value);
-    if (park) p.set('park', park);
-    /* A day belongs to the season it was picked in. Carrying it across a
-       change of season is how ?season=1927&date=2025-07-04 used to arise:
-       an empty table under two filters that both read perfectly sensibly. */
-    if (selected && String(val('f-season')) === String(season)) p.set('date', selected);
-    location.hash = '#/games?' + p;
+    location.hash = gamesHash({
+      season: val('f-season'), team: val('f-team'), gametype: t ? t.value : '',
+      park, date: selected, was: season,
+    });
   };
   ['f-season', 'f-team', 'f-type'].forEach(id => {
     const el = document.getElementById(id);
@@ -379,13 +418,12 @@ async function viewGames(_, q) {
     cal.addEventListener('click', ev => {
       const cell = ev.target.closest('button[data-date]');
       if (!cell) return;
-      const p = new URLSearchParams(location.hash.split('?')[1] || '');
-      p.set('season', season);
       // Clicking the day already open puts it away again. The calendar is its
       // own deselect, so there is no third control to explain.
-      if (cell.dataset.date === selected) p.delete('date');
-      else p.set('date', cell.dataset.date);
-      location.hash = '#/games?' + p;
+      location.hash = gamesHash({
+        season, team, gametype, park,
+        date: cell.dataset.date === selected ? '' : cell.dataset.date,
+      });
     });
   }
 }

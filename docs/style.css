@@ -197,6 +197,20 @@ button.cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset:
 }
 .cal-key .key-sw.off { background: var(--row-alt); border-color: var(--line); }
 
+/* The ground filter, which has no select because it is arrived at rather than
+   chosen. Shaped like the controls beside it so it reads as one of them, with
+   the cross that takes it off. */
+.ground {
+  display: inline-flex; align-items: center; gap: .55rem;
+  font-size: 1rem; padding: .45rem .6rem;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff;
+}
+.ground a {
+  text-decoration: none; color: var(--muted); font-weight: bold;
+  line-height: 1; font-size: 1.05rem;
+}
+.ground a:hover, .ground a:focus-visible { color: var(--accent); }
+
 .gamelist { margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: .9rem; }
 .gamelist h3 { margin-top: 0; }
 

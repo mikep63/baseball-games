@@ -30,6 +30,10 @@ for u in \
   "games?season=1927&limit=0&gametype=regular" \
   "games?season=1927&limit=400&team=NY1" \
   "games?season=1927&limit=400&gametype=worldseries" \
+  "games?season=1927&limit=400&park=NYC16" \
+  "games?season=1985&limit=400&team=BAL&park=BLO01" \
+  "teams?season=1985" \
+  "park/BLO01" \
   "games?season=1927&limit=400&date=1927-07-04" \
   "game/NYA195610080" \
   "player/ruthb101" \

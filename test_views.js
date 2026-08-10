@@ -78,7 +78,7 @@ function loadApp() {
   const body = src.slice(0, cut);
   return new Function(body + '\nreturn {viewGames, viewGame, viewPlayer, viewTeam, ' +
     'viewTeams, viewDay, viewPark, viewSearch, viewAbout, ' +
-    'weekdayOf, monthsBetween, dayBucket, setMeta: m => { META = m; }};')();
+    'weekdayOf, monthsBetween, dayBucket, gamesHash, setMeta: m => { META = m; }};')();
 }
 
 // tiny URLSearchParams stand-in for the query objects the router passes in
@@ -108,6 +108,21 @@ async function main() {
       V.viewGames([], Q({ season: 1927, gametype: 'regular' })),
       h => h.includes('cal-month') && h.includes('1,236 games in 1927')
         && !h.includes('table-wrap')],
+    /* A ground narrows like a club does, and unlike a club it has no select,
+       so the view has to name it and offer a way off it. */
+    ['games (1927) — a ground', () =>
+      V.viewGames([], Q({ season: 1927, park: 'NYC16' })),
+      h => h.includes('Yankee Stadium') && h.includes('class="ground"')
+        && h.includes('Remove the ground filter') && h.includes('table-wrap')],
+    /* The reported state, exactly: a ground carried out of its own season.
+       Bloomsburg Fair Grounds played host in 1926 and never again, so 1985
+       matches nothing -- and the view has to name the ground it could find no
+       games for, say "0 games" once rather than twice, and offer the cross. */
+    ['games (1985) — a ground with no games that season', () =>
+      V.viewGames([], Q({ season: 1985, team: 'BAL', park: 'BLO01' })),
+      h => h.includes('Bloomsburg Fair Grounds') && h.includes('0 games in 1985')
+        && h.includes('Remove the ground filter')
+        && (h.match(/No games match those filters/g) || []).length === 1],
     ['games (1927) — a day picked', () =>
       V.viewGames([], Q({ season: 1927, date: '1927-07-04' })),
       h => h.includes('July 4, 1927') && h.includes('16 games')
@@ -178,6 +193,32 @@ async function main() {
     check(`${iso} is a ${dow}`, DOW[V.weekdayOf(y, m, d)] === dow,
       DOW[V.weekdayOf(y, m, d)]);
   });
+
+  /* The day and the ground are season-scoped, and BLO01 is why. Bloomsburg
+     Fair Grounds hosted three Negro League games, all of them in 1926, and
+     has never held another. Carried out of 1926 -- as it was, silently, with
+     no control naming it and no way to switch it off -- it answers every
+     other year with "0 games" while Club and Type both read wide open. */
+  const held = { season: 1926, park: 'BLO01', date: '1926-09-19' };
+  check('a change of season drops the ground and the day',
+    V.gamesHash({ ...held, season: 1985, was: 1926 }) === '#/games?season=1985',
+    V.gamesHash({ ...held, season: 1985, was: 1926 }));
+  check('staying in the season keeps them',
+    V.gamesHash({ ...held, was: 1926 })
+      === '#/games?season=1926&park=BLO01&date=1926-09-19',
+    V.gamesHash({ ...held, was: 1926 }));
+  // The cross beside the ground: the same query, minus the ground.
+  check('the ground can be taken off',
+    V.gamesHash({ season: 1926, date: '1926-09-19' })
+      === '#/games?season=1926&date=1926-09-19');
+  // No `was` means no change of season is in play -- a calendar click, say.
+  check('a day can be set without the ground being dropped',
+    V.gamesHash({ season: 1926, park: 'BLO01', date: '1926-09-20' })
+      === '#/games?season=1926&park=BLO01&date=1926-09-20');
+  // A club survives a change of season; only the two season-scoped ones go.
+  check('a club is not season-scoped',
+    V.gamesHash({ season: 1985, team: 'BAL', park: 'BLO01', was: 1926 })
+      === '#/games?season=1985&team=BAL');
 
   // 1926's Negro League clubs played winter ball, so its strip is twelve
   // months. A hardcoded April-to-October would drop both ends of it.
