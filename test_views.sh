@@ -33,6 +33,8 @@ for u in \
   "games?season=1927&limit=400&park=NYC16" \
   "games?season=1985&limit=400&team=BAL&park=BLO01" \
   "teams?season=1985" \
+  "teams?season=1871" \
+  "games?season=1871&limit=400&date=1871-05-04" \
   "park/BLO01" \
   "games?season=1927&limit=400&date=1927-07-04" \
   "game/NYA195610080" \

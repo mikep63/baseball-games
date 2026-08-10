@@ -135,7 +135,18 @@ async function main() {
     ['games (1927) — a club', () => V.viewGames([], Q({ season: 1927, team: 'NY1' })),
       h => h.includes('155 games in 1927') && h.includes('r-W') && h.includes('r-L')
         && h.includes('r-T') && h.includes(' dh') && h.includes('doubleheader')
-        && h.includes('table-wrap') && h.includes('>Date<')],
+        && h.includes('table-wrap') && h.includes('>Date<')
+        // The date picks the day and keeps the club; the button opens the game.
+        && h.includes('href="#/games?season=1927&team=NY1&date=1927-')
+        && h.includes('<a class="pill" href="#/game/')],
+    /* 1871 has no box scores at all -- Retrosheet knows the game happened and
+       who won, and nothing about who played. The button says so and stays a
+       link, because that page still carries the result and the ground. */
+    ['games (1871) — a day with no box scores', () =>
+      V.viewGames([], Q({ season: 1871, date: '1871-05-04' })),
+      h => h.includes('May 4, 1871')
+        && h.includes('<a class="pill quiet" href="#/game/FW1187105040')
+        && h.includes('>game</a>') && !h.includes('>box</a>')],
     /* A round other than the regular season is narrow too. 1927's was a sweep,
        so this is four rows -- and the type filter, unlike the club, leaves the
        calendar in count mode. */

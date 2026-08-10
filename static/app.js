@@ -212,13 +212,32 @@ function calendarHTML(days, selected, byResult) {
     + calendarKeyHTML(byResult);
 }
 
-// What Retrosheet holds for this game, not something to click. Both are quiet
-// for that reason: a filled pill reads as a button, and the play-by-play isn't
-// a view yet.
+/* The way into a game, and the one thing in these rows meant to be clicked to
+   get there. A filled pill reads as a button, which is why the quiet ones
+   beside it are not links.
+
+   Muted where Retrosheet has no box score -- 19,664 games, all but a handful
+   of them before 1900. Muted but still a link, because the page behind it is
+   thin rather than empty: it has the result, the clubs and the ground for all
+   of them, an attendance for 7,198 and a line score for 2,578. Disabling the
+   button would be the only way those 19,664 games could be opened at all.
+
+   The word changes with the colour, so a reader who cannot tell the two pills
+   apart still reads which is which. */
+const boxLinkHTML = (g, suffix) => {
+  const has = !!g.has_box;
+  const title = has
+    ? 'The box score, with the line score and the details'
+    : 'Retrosheet has no box score for this game — the page has the result, '
+      + 'the clubs and the ground';
+  return `<a class="pill${has ? '' : ' quiet'}" href="#/game/${g.id}" title="${
+    esc(title)}">${has ? 'box' : 'game'}${esc(suffix || '')}</a>`;
+};
+
+// What else Retrosheet holds, not something to click: the play-by-play is on
+// file for 204,643 games but isn't a view yet.
 const onFileHTML = g =>
-  (g.has_box ? '<span class="pill quiet" title="Retrosheet has a full box'
-    + ' score for this game">box</span>' : '')
-  + (g.has_pbp ? '<span class="pill quiet" title="Retrosheet has a'
+  (g.has_pbp ? '<span class="pill quiet" title="Retrosheet has a'
     + ' pitch-by-pitch account of this game. Not shown here yet.">plays</span>' : '');
 
 /* The games of the chosen day. No Date column: the heading above it is the
@@ -228,7 +247,10 @@ const onFileHTML = g =>
 function dayGamesHTML(date, games) {
   const rows = games.map(g => ({
     cells: [
-      gameLink(g.id, g.number !== '0' ? `Game ${g.number}` : 'Game'),
+      // The doubleheader number rides on the button here, because there is no
+      // Date column to carry it and two rows of the same two clubs need
+      // telling apart. "box 2" is the box score of the second game.
+      boxLinkHTML(g, g.number !== '0' ? ' ' + g.number : ''),
       teamLink(g.vis, g.season, g.visName),
       n(g.vis_score),
       teamLink(g.home, g.season, g.homeName),
@@ -240,7 +262,7 @@ function dayGamesHTML(date, games) {
   }));
   return `<div class="gamelist"><h3>${niceDate(date)}</h3>
     <p class="note">${games.length} ${games.length === 1 ? 'game' : 'games'}</p>
-    ${table([{ t: 'Game', l: 1 }, { t: 'Visitor', l: 1 }, { t: 'R' },
+    ${table([{ t: 'Box', l: 1 }, { t: 'Visitor', l: 1 }, { t: 'R' },
              { t: 'Home', l: 1 }, { t: 'R' }, { t: 'Park', l: 1 },
              { t: 'Attendance' }, { t: 'On file', l: 1 }], rows,
             { empty: 'No games that day.' })}</div>`;
@@ -250,10 +272,17 @@ function dayGamesHTML(date, games) {
    whole season rather than one day of it. The Date column returns here because
    these rows run from April to October; on a single day it would only repeat
    the heading in every row, which is why dayGamesHTML has none. */
-function seasonGamesHTML(games, total) {
+function seasonGamesHTML(games, total, ctx) {
   const rows = games.map(g => ({
     cells: [
-      gameLink(g.id, niceDate(g.date) + (g.number !== '0' ? ` (${g.number})` : '')),
+      boxLinkHTML(g),
+      /* The date picks the day, the way a date does everywhere else in this
+         tab -- it selects that cell on the calendar above and lists what was
+         played, rather than jumping to one game's box score. Getting to the
+         box score is what the button is for. The filters ride along, so this
+         and a click on the calendar cell land in the same place. */
+      link(gamesHash(Object.assign({}, ctx, { date: g.date })),
+           niceDate(g.date) + (g.number !== '0' ? ` (${g.number})` : '')),
       teamLink(g.vis, g.season, g.visName),
       n(g.vis_score),
       teamLink(g.home, g.season, g.homeName),
@@ -266,8 +295,8 @@ function seasonGamesHTML(games, total) {
   return `<div class="gamelist">
     ${games.length < total ? `<p class="note">Showing the first ${
       games.length.toLocaleString()} of ${total.toLocaleString()}.</p>` : ''}
-    ${table([{ t: 'Date', l: 1 }, { t: 'Visitor', l: 1 }, { t: 'R' },
-             { t: 'Home', l: 1 }, { t: 'R' }, { t: 'Park', l: 1 },
+    ${table([{ t: 'Box', l: 1 }, { t: 'Date', l: 1 }, { t: 'Visitor', l: 1 },
+             { t: 'R' }, { t: 'Home', l: 1 }, { t: 'R' }, { t: 'Park', l: 1 },
              { t: 'Attendance' }, { t: 'On file', l: 1 }], rows,
             { empty: 'No games match those filters.' })}</div>`;
 }
@@ -399,7 +428,9 @@ async function viewGames(_, q) {
       : ''}</p>
     ${calendarHTML(data.days, selected, !!team)}
     ${selected ? dayGamesHTML(selected, data.games)
-      : (narrow && data.days.length) ? seasonGamesHTML(data.games, data.total) : ''}`;
+      : (narrow && data.days.length)
+        ? seasonGamesHTML(data.games, data.total, { season, team, gametype, park })
+        : ''}`;
 
   const go = () => {
     const t = document.getElementById('f-type');
