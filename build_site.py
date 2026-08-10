@@ -17,6 +17,7 @@ are precomputed into their own files instead.
 
 Usage: python3 build_site.py
 """
+import hashlib
 import json
 import os
 import shutil
@@ -273,9 +274,32 @@ def export_meta(conn, seasons):
 # -------------------------------------------------------------------- frontend
 
 def copy_frontend():
-    """static/ verbatim, plus the local API and the script tag that loads it."""
+    """static/ verbatim, plus the local API and the script tag that loads it.
+
+    Each reference carries a hash of the file it points at. Pages serves
+    everything with Cache-Control: max-age=600 and offers no way to change
+    that, and a reload revalidates the page but not the scripts hanging off
+    it -- so a reader who reloads after a deploy gets a fresh index.html
+    pointing at the app.js his browser has been holding for ten minutes. A
+    changed hash is a changed URL, which is a miss; an unchanged one still
+    hits, so nothing is re-fetched for a build that changed nothing.
+
+    Hashed rather than timestamped for that second half: a build id off the
+    clock would put a new URL in index.html every run and show the file as
+    modified in git with no change behind it.
+
+    What this cannot reach is index.html itself. Arrive without reloading,
+    within ten minutes of the last visit, and the page comes from cache with
+    its old references -- stale, but stale as a matched set rather than a new
+    page over an old script. Only a service worker fixes that, and this
+    project has none.
+    """
+    stamps = {}
     for name in ("app.js", "style.css", "api-local.js"):
-        shutil.copy(os.path.join(STATIC, name), os.path.join(DOCS, name))
+        src = os.path.join(STATIC, name)
+        shutil.copy(src, os.path.join(DOCS, name))
+        with open(src, "rb") as f:
+            stamps[name] = hashlib.sha256(f.read()).hexdigest()[:8]
     html = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
     if "api-local.js" not in html:
         html = html.replace('<script src="/app.js"></script>',
@@ -283,9 +307,19 @@ def copy_frontend():
                             '<script src="app.js"></script>')
     # Pages serves from a subdirectory, so absolute asset paths would 404
     html = html.replace('href="/style.css"', 'href="style.css"')
+    # After those rewrites, and quoted: "app.js" cannot match inside
+    # "api-local.js", so the order of these does not matter.
+    for name, stamp in stamps.items():
+        ref = '"%s"' % name
+        if ref not in html:
+            raise SystemExit("build_site.py: index.html does not reference %s, so "
+                             "the cache stamp would silently do nothing." % name)
+        html = html.replace(ref, '"%s?v=%s"' % (name, stamp))
     open(os.path.join(DOCS, "index.html"), "w", encoding="utf-8").write(html)
     open(os.path.join(DOCS, ".nojekyll"), "w").close()
     print("  frontend copied, index.html rewritten for a subdirectory")
+    print("  cache stamps %s" % ", ".join(
+        "%s=%s" % (n, s) for n, s in sorted(stamps.items())))
 
 
 def main():
