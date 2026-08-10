@@ -484,12 +484,6 @@ def api_team(code, q, conn):
             "roster": roster}
 
 
-def api_day(date, conn):
-    gs = rows(conn.execute(GAME_LIST_SQL + " AND g.date = ? ORDER BY g.gametype, g.id",
-                           (date,)))
-    return {"date": date, "games": _decorate_games(conn, gs)}
-
-
 def api_park(park_id, conn):
     p = one(conn.execute("SELECT * FROM park WHERE id = ?", (park_id,)))
     if not p:
@@ -579,9 +573,6 @@ class Handler(SimpleHTTPRequestHandler):
             m = re.match(r"^/api/team/([A-Z0-9]+)$", path)
             if m:
                 return self.send_json(api_team(m.group(1), q, conn))
-            m = re.match(r"^/api/day/(\d{4}-\d{2}-\d{2})$", path)
-            if m:
-                return self.send_json(api_day(m.group(1), conn))
             m = re.match(r"^/api/park/([A-Z0-9]+)$", path)
             if m:
                 return self.send_json(api_park(m.group(1), conn))

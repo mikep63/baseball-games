@@ -27,7 +27,7 @@ globalThis.document = {
   querySelectorAll: () => [],
 };
 globalThis.window = { scrollTo() {}, addEventListener() {} };
-globalThis.location = { hash: '#/games' };
+globalThis.location = { hash: '#/games', replace(h) { this.hash = h; } };
 globalThis.encodeURIComponent = globalThis.encodeURIComponent || (s => s);
 
 // jsc has no URLSearchParams; the views only ever set, read and stringify.
@@ -120,7 +120,6 @@ async function main() {
       h => h.includes('Schedule') && h.includes('Roster') && h.includes('110')],
     ['team — season list', () => V.viewTeam(['NYA'], Q({})), h => h.includes('Season')],
     ['teams — 1927', () => V.viewTeams([], Q({ season: 1927 })), h => h.includes('Clubs in 1927')],
-    ['day — 1956-10-08', () => V.viewDay(['1956-10-08']), h => h.includes('October 8, 1956')],
     ['park — Yankee Stadium', () => V.viewPark(['NYC16']), h => h.includes('Games')],
     ['search — ruth', () => V.viewSearch([], Q({ q: 'ruth' })), h => h.includes('Babe Ruth')],
     ['about', () => V.viewAbout(), h => h.includes('Retrosheet')],
@@ -142,6 +141,12 @@ async function main() {
       check(label, false, String(e) + (e.stack ? '\n        ' + e.stack.split('\n')[0] : ''));
     }
   }
+
+  // --- the day view is a redirect now, so it renders nothing to assert on
+  location.hash = '#/day/1956-10-08';
+  await V.viewDay(['1956-10-08']);
+  check('day — redirects into the games tab',
+    location.hash === '#/games?season=1956&date=1956-10-08', location.hash);
 
   /* Calendar arithmetic, checked against Retrosheet rather than against
      itself: game.dow is recorded per game in the database, and these are the

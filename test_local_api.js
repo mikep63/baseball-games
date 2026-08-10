@@ -179,10 +179,7 @@ async function main() {
   compare('picking a day leaves the calendar whole',
     { n: picked.days.length }, { n: whole.days.length }, ['n']);
 
-  // --- a day and a park
-  compare('/day/1956-10-08', await API.get('/day/1956-10-08'), fixture('day_1956-10-08'),
-    rowPaths('games', 1, ['id', 'visName', 'homeName', 'vis_score', 'home_score',
-                          'parkName', 'attendance']));
+  // --- a park
   compare('/park/NYC16', await API.get('/park/NYC16'), fixture('park_NYC16'),
     ['park.name', 'park.city', 'park.state', 'span.a', 'span.b', 'span.n',
      ...rowPaths('bySeason', 20, ['season', 'n', 'avg_att'])]);

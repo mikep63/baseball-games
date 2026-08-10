@@ -573,7 +573,7 @@ async function viewGame(parts) {
 
   app.innerHTML = `
     <div class="crumb">${link('#/games?season=' + g.season, g.season + ' games')}
-      · ${link('#/day/' + g.date, 'every game that day')}</div>
+      · ${link(`#/games?season=${g.season}&date=${g.date}`, 'every game that day')}</div>
     <div class="gamehead">
       <div class="score">
         <span class="${g.vis_score > g.home_score ? 'win' : ''}">${esc(g.visName)} ${n(g.vis_score)}</span>
@@ -851,18 +851,16 @@ async function viewTeams(_, q) {
 
 // ---------------------------------------------------------------- day, park
 
+/* The day view was a second way to read one date -- its own endpoint, its own
+   columns for the same rows, and no filters. The calendar reaches the same day
+   with the club and the round still applied, so this is now a redirect that
+   keeps the old links working. A season is the calendar year in all 239,442
+   games Retrosheet has, so the year is the season and nothing is lost.
+   `replace`, not assignment: an added history entry would bounce the reader
+   straight back here on the first press of Back. */
 async function viewDay(parts) {
-  const d = await api('/day/' + parts[0]);
-  const rows = d.games.map(g => ({
-    cells: [gameLink(g.id, `${g.visName} at ${g.homeName}`),
-      `${n(g.vis_score)}–${n(g.home_score)}`,
-      g.parkName ? link('#/park/' + g.park, g.parkName) : '',
-      g.attendance ? g.attendance.toLocaleString() : '',
-      esc(META.gametypes[g.gametype] || '')],
-  }));
-  app.innerHTML = `<h2>${niceDate(d.date)}</h2>` + table(
-    [{ t: 'Game', l: 1 }, { t: 'Score' }, { t: 'Park', l: 1 }, { t: 'Att' },
-     { t: 'Type', l: 1 }], rows, { empty: 'No games that day.' });
+  const date = parts[0] || '';
+  location.replace(`#/games?season=${date.slice(0, 4)}&date=${date}`);
 }
 
 async function viewPark(parts) {

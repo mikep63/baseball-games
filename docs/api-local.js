@@ -405,12 +405,6 @@ window.LocalAPI = (function () {
              records, roster };
   }
 
-  async function day(date) {
-    const s = await shard(Number(date.slice(0, 4)));
-    const list = s.games.filter(g => g.date === date).map(g => Object.assign({}, g));
-    return { date, games: await decorate(list) };
-  }
-
   async function park(id) {
     const pk = await parks();
     const p = pk.by.get(id);
@@ -438,7 +432,6 @@ window.LocalAPI = (function () {
     if ((m = p.match(/^\/player\/([a-z0-9]+)\/games$/))) return playerGames(m[1], q);
     if ((m = p.match(/^\/player\/([a-z0-9]+)$/))) return player(m[1]);
     if ((m = p.match(/^\/team\/([A-Z0-9]+)$/))) return team(m[1], q);
-    if ((m = p.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/))) return day(m[1]);
     if ((m = p.match(/^\/park\/([A-Z0-9]+)$/))) return park(m[1]);
     throw new Error('unknown endpoint: ' + p);
   }

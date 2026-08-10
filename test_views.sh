@@ -34,7 +34,6 @@ for u in \
   "player/ruthb101/games?season=1927" \
   "team/NYA?season=1927" \
   "team/NYA" \
-  "day/1956-10-08" \
   "park/NYC16" \
   "search?q=ruth"
 do
