@@ -197,8 +197,8 @@ button.cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset:
 }
 .cal-key .key-sw.off { background: var(--row-alt); border-color: var(--line); }
 
-.dayview { margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: .9rem; }
-.dayview h3 { margin-top: 0; }
+.gamelist { margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+.gamelist h3 { margin-top: 0; }
 
 /* One month to a row on a phone. Two would fit, at about 24px a cell, and a
    24px target is not one you can hit with a thumb. */

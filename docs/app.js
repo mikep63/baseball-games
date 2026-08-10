@@ -212,6 +212,15 @@ function calendarHTML(days, selected, byResult) {
     + calendarKeyHTML(byResult);
 }
 
+// What Retrosheet holds for this game, not something to click. Both are quiet
+// for that reason: a filled pill reads as a button, and the play-by-play isn't
+// a view yet.
+const onFileHTML = g =>
+  (g.has_box ? '<span class="pill quiet" title="Retrosheet has a full box'
+    + ' score for this game">box</span>' : '')
+  + (g.has_pbp ? '<span class="pill quiet" title="Retrosheet has a'
+    + ' pitch-by-pitch account of this game. Not shown here yet.">plays</span>' : '');
+
 /* The games of the chosen day. No Date column: the heading above it is the
    date, and repeating it in every row says nothing. The link stays where the
    date used to be, and carries the doubleheader number, which is the one
@@ -226,21 +235,41 @@ function dayGamesHTML(date, games) {
       n(g.home_score),
       g.parkName ? link('#/park/' + g.park, g.parkName) : '',
       g.attendance ? g.attendance.toLocaleString() : '',
-      // What Retrosheet holds for this game, not something to click. Both are
-      // quiet for that reason: a filled pill reads as a button, and the
-      // play-by-play isn't a view yet.
-      (g.has_box ? '<span class="pill quiet" title="Retrosheet has a full box'
-        + ' score for this game">box</span>' : '')
-      + (g.has_pbp ? '<span class="pill quiet" title="Retrosheet has a'
-        + ' pitch-by-pitch account of this game. Not shown here yet.">plays</span>' : ''),
+      onFileHTML(g),
     ],
   }));
-  return `<div class="dayview"><h3>${niceDate(date)}</h3>
+  return `<div class="gamelist"><h3>${niceDate(date)}</h3>
     <p class="note">${games.length} ${games.length === 1 ? 'game' : 'games'}</p>
     ${table([{ t: 'Game', l: 1 }, { t: 'Visitor', l: 1 }, { t: 'R' },
              { t: 'Home', l: 1 }, { t: 'R' }, { t: 'Park', l: 1 },
              { t: 'Attendance' }, { t: 'On file', l: 1 }], rows,
             { empty: 'No games that day.' })}</div>`;
+}
+
+/* The games a narrow filter came back with, listed under the calendar for the
+   whole season rather than one day of it. The Date column returns here because
+   these rows run from April to October; on a single day it would only repeat
+   the heading in every row, which is why dayGamesHTML has none. */
+function seasonGamesHTML(games, total) {
+  const rows = games.map(g => ({
+    cells: [
+      gameLink(g.id, niceDate(g.date) + (g.number !== '0' ? ` (${g.number})` : '')),
+      teamLink(g.vis, g.season, g.visName),
+      n(g.vis_score),
+      teamLink(g.home, g.season, g.homeName),
+      n(g.home_score),
+      g.parkName ? link('#/park/' + g.park, g.parkName) : '',
+      g.attendance ? g.attendance.toLocaleString() : '',
+      onFileHTML(g),
+    ],
+  }));
+  return `<div class="gamelist">
+    ${games.length < total ? `<p class="note">Showing the first ${
+      games.length.toLocaleString()} of ${total.toLocaleString()}.</p>` : ''}
+    ${table([{ t: 'Date', l: 1 }, { t: 'Visitor', l: 1 }, { t: 'R' },
+             { t: 'Home', l: 1 }, { t: 'R' }, { t: 'Park', l: 1 },
+             { t: 'Attendance' }, { t: 'On file', l: 1 }], rows,
+            { empty: 'No games match those filters.' })}</div>`;
 }
 
 // --------------------------------------------------------------- game finder
@@ -266,11 +295,25 @@ async function viewGames(_, q) {
   if (!seasonTypes.includes(gametype)) gametype = '';
 
   const teams = (await api('/teams?season=' + season)).teams;
-  /* With no day picked there is no table under the calendar, so there are no
-     rows worth asking for -- a modern season would otherwise put 400 games on
-     the wire to be thrown away before the first paint. A day has never held
-     more than 27. */
-  const params = new URLSearchParams({ season, limit: date ? 400 : 0 });
+
+  /* Whether a list of games belongs under the calendar at all.
+
+     A club, or a round other than the regular season, is a filter narrow
+     enough to read: the largest club-season on record is 180 games (the 2003
+     Yankees among others) and the largest round is 289 (the 1926 Negro
+     Leagues); every other round is twenty or fewer. Left at Every club and
+     Any, a season is 2,478 games in 2025, which is the list this tab was
+     built to stop showing. There the calendar is the whole answer, and a day
+     has to be picked before there is anything to tabulate.
+
+     Regular season counts as no filter at all: in 123 of the 155 seasons it
+     is all but a handful of the games, so choosing it narrows nothing. */
+  const narrow = !!team || (gametype !== '' && gametype !== 'regular');
+  const wantList = !!date || narrow;
+  /* 400 covers the widest of those with room to spare, and asking for none is
+     what keeps the calendar-only view from putting rows on the wire that
+     nothing is going to render. */
+  const params = new URLSearchParams({ season, limit: wantList ? 400 : 0 });
   if (team) params.set('team', team);
   if (gametype) params.set('gametype', gametype);
   if (date) params.set('date', date);
@@ -311,7 +354,8 @@ async function viewGames(_, q) {
         niceDate(data.days[0][0])} to ${niceDate(data.days[data.days.length - 1][0])}.`
       : ''}</p>
     ${calendarHTML(data.days, selected, !!team)}
-    ${selected ? dayGamesHTML(selected, data.games) : ''}`;
+    ${selected ? dayGamesHTML(selected, data.games)
+      : narrow ? seasonGamesHTML(data.games, data.total) : ''}`;
 
   const go = () => {
     const p = new URLSearchParams({ season: val('f-season') });

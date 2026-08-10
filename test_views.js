@@ -100,16 +100,34 @@ async function main() {
       h => h.includes('cal-month') && h.includes('April') && h.includes('October')
         && h.includes('1,275 games in 1927') && h.includes('190 days')
         && !h.includes('table-wrap')],
+    /* Regular season is not a narrowing. It is 1,236 of 1927's 1,275 games --
+       the rest being 35 Negro League games and a four-game World Series -- so
+       it gets the same calendar-only treatment as Any. Listing it would be
+       listing the season, which is what this tab was built to stop doing. */
+    ['games (1927) — regular season only', () =>
+      V.viewGames([], Q({ season: 1927, gametype: 'regular' })),
+      h => h.includes('cal-month') && h.includes('1,236 games in 1927')
+        && !h.includes('table-wrap')],
     ['games (1927) — a day picked', () =>
       V.viewGames([], Q({ season: 1927, date: '1927-07-04' })),
       h => h.includes('July 4, 1927') && h.includes('16 games')
         && h.includes('New York Yankees') && h.includes('aria-current="date"')],
-    /* A club turns the counts into results. The 1927 Giants played 155 games
-       over 27 doubleheader days and tied one, so this one fixture carries
-       every branch of the result cell. */
+    /* A club turns the counts into results, and is narrow enough to list under
+       the calendar. The 1927 Giants played 155 games over 27 doubleheader days
+       and tied one, so this one fixture carries every branch of the result
+       cell. The list keeps its Date column, because these rows span a season
+       rather than an afternoon. */
     ['games (1927) — a club', () => V.viewGames([], Q({ season: 1927, team: 'NY1' })),
       h => h.includes('155 games in 1927') && h.includes('r-W') && h.includes('r-L')
-        && h.includes('r-T') && h.includes(' dh') && h.includes('doubleheader')],
+        && h.includes('r-T') && h.includes(' dh') && h.includes('doubleheader')
+        && h.includes('table-wrap') && h.includes('>Date<')],
+    /* A round other than the regular season is narrow too. 1927's was a sweep,
+       so this is four rows -- and the type filter, unlike the club, leaves the
+       calendar in count mode. */
+    ['games (1927) — World Series', () =>
+      V.viewGames([], Q({ season: 1927, gametype: 'worldseries' })),
+      h => h.includes('4 games in 1927') && h.includes('table-wrap')
+        && h.includes('Pittsburgh Pirates') && !h.includes('r-W')],
     ['game — Larsen perfect game', () => V.viewGame(['NYA195610080']),
       h => h.includes('Don Larsen') && h.includes('linescore') && h.includes('Yankee Stadium')],
     ['player — Ruth, no season', () => V.viewPlayer(['ruthb101'], Q({})),

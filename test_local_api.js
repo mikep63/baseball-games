@@ -159,10 +159,19 @@ async function main() {
     fixture('games_season_1927_limit_0'),
     ['total', 'shown', 'days.length', ...days(60, ['0', '1', '2'])]);
 
-  compare('/games?season=1927&team=NY1 (results)',
-    await API.get('/games?season=1927&limit=0&team=NY1'),
-    fixture('games_season_1927_limit_0_team_NY1'),
-    ['total', 'shown', 'days.length', ...days(60, ['0', '1', '2'])]);
+  compare('/games?season=1927&team=NY1 (results + list)',
+    await API.get('/games?season=1927&limit=400&team=NY1'),
+    fixture('games_season_1927_limit_400_team_NY1'),
+    ['total', 'shown', 'days.length', ...days(60, ['0', '1', '2']),
+     ...rowPaths('games', 30, ['id', 'date', 'number', 'vis', 'home', 'visName',
+       'homeName', 'vis_score', 'home_score', 'parkName'])]);
+
+  compare('/games?season=1927&gametype=worldseries',
+    await API.get('/games?season=1927&limit=400&gametype=worldseries'),
+    fixture('games_season_1927_limit_400_gametype_worldseries'),
+    ['total', 'shown', 'days.length', ...days(8, ['0', '1', '2']),
+     ...rowPaths('games', 4, ['id', 'date', 'visName', 'homeName',
+       'vis_score', 'home_score', 'parkName', 'attendance'])]);
 
   compare('/games?season=1927&date=1927-07-04',
     await API.get('/games?season=1927&limit=400&date=1927-07-04'),
