@@ -755,10 +755,12 @@ const typeRank = t => (TYPE_ORDER.indexOf(t) + 1) || 99;
 /* Column orders follow baseball-records, so the two front ends put the same
    number in the same place; the tail of each line is what this database has
    and Lahman does not. */
-const BAT_HEAD = [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'G' }, { t: 'AB' },
-  { t: 'R' }, { t: 'H' }, { t: '2B' }, { t: '3B' }, { t: 'HR' }, { t: 'RBI' },
-  { t: 'SB' }, { t: 'CS' }, { t: 'BB' }, { t: 'SO' }, { t: 'AVG' }, { t: 'OBP' },
-  { t: 'SLG' }, { t: 'OPS' }, { t: 'GIDP' }, { t: 'HBP' }, { t: 'SH' }, { t: 'SF' }];
+/* The rates lead, the way the pitching line leads with W-L-ERA: a batting
+   line is read for the slash first and the counting stats after it. */
+const BAT_HEAD = [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'AVG' }, { t: 'OBP' },
+  { t: 'SLG' }, { t: 'OPS' }, { t: 'G' }, { t: 'AB' }, { t: 'R' }, { t: 'H' },
+  { t: '2B' }, { t: '3B' }, { t: 'HR' }, { t: 'RBI' }, { t: 'SB' }, { t: 'CS' },
+  { t: 'BB' }, { t: 'SO' }, { t: 'GIDP' }, { t: 'HBP' }, { t: 'SH' }, { t: 'SF' }];
 
 const PIT_HEAD = [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'W' }, { t: 'L' },
   { t: 'ERA' }, { t: 'G' }, { t: 'GS' }, { t: 'CG' }, { t: 'SHO' }, { t: 'SV' },
@@ -773,9 +775,9 @@ const FLD_HEAD = [{ t: 'Season' }, { t: 'Pos', l: 1 }, { t: 'G' }, { t: 'Inn' },
    rates have to be recomputed from the summed counts rather than averaged. */
 const batLine = (r, label) => [
   label ?? r.season, label ? '' : teamLink(r.team, r.season, r.teamName),
+  avg(r.h, r.ab), rate3(obpOf(r)), rate3(slgOf(r)), rate3(opsOf(r)),
   n(r.g), n(r.ab), n(r.r), n(r.h), n(r.d), n(r.t), n(r.hr), n(r.rbi),
   n(r.sb), n(r.cs), n(r.bb), n(r.so),
-  avg(r.h, r.ab), rate3(obpOf(r)), rate3(slgOf(r)), rate3(opsOf(r)),
   n(r.gidp), n(r.hbp), n(r.sh), n(r.sf)];
 
 const pitLine = (r, label) => [
