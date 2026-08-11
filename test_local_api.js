@@ -109,7 +109,9 @@ async function main() {
      ...rowPaths('batting', 10, ['person', 'name', 'side', 'ab', 'r', 'h', 'rbi',
                                  'bb', 'so', 'hr', 'positions.0', 'pinchHitInning']),
      ...rowPaths('pitching', 2, ['person', 'name', 'outs', 'h', 'bb', 'so', 'er', 'bfp']),
-     ...rowPaths('events', 3, ['kind', 'side', 'inning', 'playerNames.0'])]);
+     // runners_on is displayed now, so it is compared now.
+     ...rowPaths('events', 3, ['kind', 'side', 'inning', 'runners_on',
+                               'playerNames.0'])]);
 
   // --- a career: every season row and the fielding breakdown
   compare('/player/ruthb101', await API.get('/player/ruthb101'), fixture('player_ruthb101'),

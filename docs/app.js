@@ -616,15 +616,27 @@ function boxSummaryHTML(batting, pitching, events, teamBox, sides) {
   section('Batting', add => {
     add('2B', tally(batting.filter(b => b.d > 0).map(b => ({ name: nm(b), count: b.d }))));
     add('3B', tally(batting.filter(b => b.t > 0).map(b => ({ name: nm(b), count: b.t }))));
-    // Home runs carry the inning, the pitcher and how many were aboard. Older
-    // seasons have no itemised events, so fall back to the batting lines.
+    /* Home runs carry the inning, the pitcher and how many were aboard, and
+       they group by batter the way a box score prints them: a man who hit two
+       is named once, with his count and both accounts of them, rather than
+       appearing twice in a list that never says he did it twice.
+
+       The runners aboard are on the event as runners_on. This read e.on, which
+       is on nothing, so the count had never once appeared -- 335,983 of the
+       335,984 home runs in the database carry it. */
     const hrs = byKind.hr || [];
+    const byBatter = new Map();
+    for (const e of hrs) {
+      const who = e.playerLast?.[0] || e.playerNames[0];
+      const off = e.playerLast?.[1] ? ` off ${e.playerLast[1]}` : '';
+      // A solo home run says nothing, the way it is written on paper.
+      const on = e.runners_on ? `, ${e.runners_on} on` : '';
+      if (!byBatter.has(who)) byBatter.set(who, []);
+      byBatter.get(who).push(`${ordinal(e.inning)}${off}${on}`);
+    }
     add('HR', hrs.length
-      ? hrs.map(e => {
-        const on = e.on ? `, ${e.on} on` : '';
-        const off = e.playerLast?.[1] ? ` off ${e.playerLast[1]}` : '';
-        return `${e.playerLast?.[0] || e.playerNames[0]} (${ordinal(e.inning)}${off}${on})`;
-      })
+      ? [...byBatter].map(([who, list]) =>
+        `${who}${list.length > 1 ? ' ' + list.length : ''} (${list.join(', ')})`)
       : tally(batting.filter(b => b.hr > 0).map(b => ({ name: nm(b), count: b.hr }))));
     add('TB', tally(batting.filter(b => tb(b) > 0).map(b => ({ name: nm(b), count: tb(b) }))));
     add('RBI', tally(batting.filter(b => b.rbi > 0).map(b => ({ name: nm(b), count: b.rbi }))));

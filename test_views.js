@@ -156,6 +156,13 @@ async function main() {
         && h.includes('Pittsburgh Pirates') && !h.includes('r-W')],
     ['game — Larsen perfect game', () => V.viewGame(['NYA195610080']),
       h => h.includes('Don Larsen') && h.includes('linescore') && h.includes('Yankee Stadium')],
+    /* Maldonado hit two, in the 7th and the 9th. He is named once with the
+       count and both accounts, not twice as though they were separate men --
+       and the runners aboard appear at all, which they had never done. */
+    ['game — two home runs by one man read as one entry', () =>
+      V.viewGame(['LAN198610050']),
+      h => h.includes('Maldonado 2 (7th off Hershiser, 3 on, 9th off Galvez, 1 on)')
+        && h.includes('Melvin (8th off Galvez, 1 on)')],
     ['player — Ruth, no season', () => V.viewPlayer(['ruthb101'], Q({})),
       h => h.includes('Babe Ruth') && h.includes('Batting') && h.includes('Career')
         // He pitched, so the decisions have to reach the table: 94-46 lifetime.

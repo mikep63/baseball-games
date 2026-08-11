@@ -283,6 +283,9 @@ window.LocalAPI = (function () {
     const events = (s.bev.get(gid) || []).map(e => {
       const parts = (e.players || '').split(',').filter(Boolean);
       return Object.assign({}, e, {
+        // The export calls it `on` to keep the shards short; app.py calls it
+        // runners_on and app.py is the shape both backends answer in.
+        runners_on: e.on ?? null,
         playerNames: parts.map(x => nameOf(pe.get(x)) || x),
         playerLast: parts.map(x => last(x) || nameOf(pe.get(x)) || x),
       });

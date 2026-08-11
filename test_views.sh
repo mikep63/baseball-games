@@ -38,6 +38,7 @@ for u in \
   "park/BLO01" \
   "games?season=1927&limit=400&date=1927-07-04" \
   "game/NYA195610080" \
+  "game/LAN198610050" \
   "player/ruthb101" \
   "player/ruthb101/games?season=1927" \
   "player/gibsj101" \
