@@ -163,8 +163,10 @@ async function main() {
         // 15 World Series home runs are his record too, and they used to be
         // filtered out of every table on the page.
         && h.includes('World Series')],
-    ['player — Ruth, 1927 log', () => V.viewPlayer(['ruthb101'], Q({ season: 1927 })),
-      h => h.includes('Babe Ruth')],
+    /* The log is its own page now, reached from the picker under the bio. */
+    ['player — Ruth, 1927 log', () => V.viewPlayer(['ruthb101', 'games'], Q({ season: 1927 })),
+      h => h.includes('1927 game log') && h.includes('← Babe Ruth')
+        && h.includes('href="#/player/ruthb101"')],
     /* Every one of his 495 games is gametype 'negro', so a page that showed
        the regular season alone showed him nothing at all. */
     ['player — Josh Gibson, Negro Leagues only', () => V.viewPlayer(['gibsj101'], Q({})),
@@ -188,9 +190,10 @@ async function main() {
        Totalled together that is 103-69; split, the regular season reads the
        98-64 he is credited with. */
     ['player — Lasorda, 1977 managed log', () =>
-      V.viewPlayer(['lasot101'], Q({ season: 1977 })),
+      V.viewPlayer(['lasot101', 'games'], Q({ season: 1977 })),
       h => h.includes('172 games in 1977') && h.includes('98–64')
-        && h.includes('World Series') && !h.includes('103–69')],
+        && h.includes('World Series') && !h.includes('103–69')
+        && h.includes('← Tom Lasorda')],
     ['player — Klem, umpiring record', () => V.viewPlayer(['klemb901'], Q({})),
       // 5,369 regular-season games, 3,544 of them behind the plate.
       h => h.includes('Bill Klem') && h.includes('Umpiring')
@@ -199,8 +202,15 @@ async function main() {
         && !h.includes('>AVG<') && !h.includes('>ERA<')],
     /* Crews were two men in 1905, so the plate and first base carry the
        season and second and third stay empty. */
-    ['player — Klem, 1905 umpired log', () => V.viewPlayer(['klemb901'], Q({ season: 1905 })),
+    ['player — Klem, 1905 umpired log', () =>
+      V.viewPlayer(['klemb901', 'games'], Q({ season: 1905 })),
       h => h.includes('151 games in 1905') && h.includes('>HP<')],
+    /* The picker sits under the bio and above the season tables, and the old
+       ?season= address still lands on the log rather than on a player page
+       with the season quietly dropped. */
+    ['player — the log picker leads the tables', () => V.viewPlayer(['ruthb101'], Q({})),
+      h => h.indexOf('Game log') < h.indexOf('Batting')
+        && h.includes('id="gl-season"')],
     ['team — 1927 Yankees', () => V.viewTeam(['NYA'], Q({ season: 1927 })),
       h => h.includes('Schedule') && h.includes('Roster') && h.includes('110')],
     ['team — season list', () => V.viewTeam(['NYA'], Q({})), h => h.includes('Season')],
@@ -232,6 +242,14 @@ async function main() {
   await V.viewDay(['1956-10-08']);
   check('day — redirects into the games tab',
     location.hash === '#/games?season=1956&date=1956-10-08', location.hash);
+
+  /* The log moved out of the player page and onto one of its own. The address
+     it used to live at still reaches it, so a bookmark or an old link lands on
+     the log rather than on a player page with the season quietly dropped. */
+  location.hash = '#/player/ruthb101?season=1927';
+  await V.viewPlayer(['ruthb101'], Q({ season: 1927 }));
+  check('player — the old ?season= address redirects to the log page',
+    location.hash === '#/player/ruthb101/games?season=1927', location.hash);
 
   /* Calendar arithmetic, checked against Retrosheet rather than against
      itself: game.dow is recorded per game in the database, and these are the

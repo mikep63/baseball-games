@@ -543,7 +543,24 @@ def api_player_games(pid, q, conn):
         g["teamName"] = onames.get((g["team"], g["season"]), g["team"])
         g["oppName"] = onames.get((g["opp"], g["season"]), g["opp"])
 
-    return {"games": gs, "managed": managed, "umpired": umpired,
+    # The log is a page of its own now, so it has to be able to say whose it
+    # is and offer the other seasons without a second round trip for a name.
+    p = one(conn.execute("SELECT * FROM person WHERE id = ?", (pid,)))
+    seasons = sorted(r[0] for r in conn.execute("""
+        SELECT DISTINCT g.season FROM bat b JOIN game g ON g.id = b.game
+          WHERE b.person = :pid
+        UNION SELECT g.season FROM pit t JOIN game g ON g.id = t.game
+          WHERE t.person = :pid
+        UNION SELECT season FROM game
+          WHERE mgr_home IS :pid OR mgr_vis IS :pid
+        UNION SELECT season FROM game
+          WHERE ump_hp IS :pid OR ump_1b IS :pid OR ump_2b IS :pid
+             OR ump_3b IS :pid OR ump_lf IS :pid OR ump_rf IS :pid""",
+        {"pid": pid}))
+
+    return {"person": {"id": pid, "name": name_of(p)} if p else None,
+            "seasons": seasons,
+            "games": gs, "managed": managed, "umpired": umpired,
             "total": len(gs) + len(managed) + len(umpired)}
 
 

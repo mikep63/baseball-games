@@ -841,9 +841,15 @@ function statSections(list, head, line) {
 
 async function viewPlayer(parts, q) {
   const id = parts[0];
+  if (parts[1] === 'games') return viewPlayerGames(id, q);
+  /* The log used to hang off the bottom of this page under ?season=. It is a
+     page of its own now, and the old address still points at it rather than
+     at a player page with the season silently ignored. */
+  const season = q.get('season');
+  if (season) return location.replace(`#/player/${id}/games?season=${season}`);
+
   const d = await api('/player/' + id);
   const p = d.person;
-  const season = q.get('season') || '';
 
   const bio = [];
   const add = (k, v) => { if (v) bio.push(`<div><span class="k">${k}</span> ${v}</div>`); };
@@ -884,44 +890,79 @@ async function viewPlayer(parts, q) {
   const batting = (bat && anyPA) ? `<h3>Batting</h3>${bat}` : '';
   const pitching = pit ? `<h3>Pitching</h3>${pit}` : '';
 
-  const years = d.seasons.map(y =>
-    `<option value="${y}"${String(y) === season ? ' selected' : ''}>${y}</option>`).join('');
+  /* Directly under the bio, above the season tables. Every game he took part
+     in is the thing this database has that a season-totals one does not, and
+     it had been sitting below twenty seasons of tables where it had to be
+     scrolled past everything to be found. */
+  const log = d.seasons.length
+    ? `<h3>Game log</h3>
+       <div class="controls">
+         <label>Season<select id="gl-season">
+           <option value="">— pick a season —</option>${seasonOptions(d.seasons)}
+         </select></label>
+       </div>`
+    /* A coach, and nothing else. Retrosheet's biography file has his dates but
+       no game file names a coach, so there is no season to offer and saying so
+       beats an empty picker. */
+    : `<h3>Game log</h3><p class="empty">No games on file — the game files
+       record players, managers and umpires, but not coaches.</p>`;
 
   app.innerHTML = `
     <h2>${esc(p.name)}${p.hof ? '<span class="pill alt">HOF</span>' : ''}</h2>
     <div class="meta-grid">${bio.join('')}</div>
+    ${log}
     ${pitcherFirst ? pitching + batting : batting + pitching}
     ${fld ? `<h3>Fielding</h3>${fld}` : ''}
-    ${mgr ? `<h3>Managing</h3>${mgr}` : ''}
-    ${ump ? `<h3>Umpiring</h3>${ump}` : ''}
-    <h3>Game log</h3>
+    ${mgr ? `<h3>Managing</h3>${mgr}` : roleGap(p.mgr_debut, 'a manager')}
+    ${ump ? `<h3>Umpiring</h3>${ump}` : roleGap(p.ump_debut, 'an umpire')}`;
+
+  const sel = document.getElementById('gl-season');
+  if (sel) sel.addEventListener('change', e => {
+    if (e.target.value) location.hash = `#/player/${id}/games?season=${e.target.value}`;
+  });
+}
+
+const seasonOptions = (seasons, picked) => seasons.map(y =>
+  `<option value="${y}"${String(y) === String(picked) ? ' selected' : ''}>${y}</option>`
+).join('');
+
+/* Two files that do not quite agree. The biography file gives Ruth managerial
+   dates; no game in the game files names him as one, and 153 of the 1,007
+   managers and 70 of the 2,369 umpires are in the same position. Saying so is
+   better than a bio line promising a record that never appears below it. */
+const roleGap = (debut, what) => !debut ? ''
+  : `<p class="note">Retrosheet's biography file records him as ${what}, but no
+     game in the files names him one.</p>`;
+
+/* The log as a page of its own, with the picker carried along so a reader
+   working through a career moves season to season without going back for the
+   control each time. */
+async function viewPlayerGames(id, q) {
+  const season = q.get('season') || '';
+  const d = await api(`/player/${id}/games?season=${season}`);
+  const name = d.person ? d.person.name : id;
+
+  app.innerHTML = `
+    <div class="crumb">${link('#/player/' + id, '← ' + name)}</div>
+    <h2>${esc(season)} game log</h2>
     <div class="controls">
-      <label>Season<select id="gl-season">
-        <option value="">— pick a season —</option>${years}</select></label>
+      <label>Season<select id="gl-season">${
+        seasonOptions(d.seasons || [], season)}</select></label>
     </div>
     <div id="gamelog"></div>`;
 
-  document.getElementById('gl-season').addEventListener('change', e => {
-    const p2 = new URLSearchParams();
-    if (e.target.value) p2.set('season', e.target.value);
-    location.hash = `#/player/${id}?${p2}`;
+  const sel = document.getElementById('gl-season');
+  if (sel) sel.addEventListener('change', e => {
+    location.hash = `#/player/${id}/games?season=${e.target.value}`;
   });
-  if (season) await renderGameLog(id, season);
-  else document.getElementById('gamelog').innerHTML = d.seasons.length
-    ? '<p class="note">Pick a season to see every game he took part in.</p>'
-    /* A coach, and nothing else. Retrosheet's biography file has his dates but
-       no game file names a coach, so there is no season to offer and saying so
-       beats an empty picker. */
-    : '<p class="empty">No games on file — the game files record players, '
-      + 'managers and umpires, but not coaches.</p>';
+  renderGameLog(d, season);
 }
 
 /* One table per way he took part. A hitter's log has no business carrying
    empty IP and ER columns, and a two-way player -- Ruth in 1918, Ohtani now --
    gets both, each with the stats that belong to it, rather than one wide row
    half of which is blank. */
-async function renderGameLog(id, season) {
-  const d = await api(`/player/${id}/games?season=${season}`);
+function renderGameLog(d, season) {
   const common = g => [
     gameLink(g.id, niceDate(g.date)),
     teamLink(g.team, g.season, g.teamName),

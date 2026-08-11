@@ -405,7 +405,20 @@ window.LocalAPI = (function () {
     }
     const byDate = (a, b) => a.date.localeCompare(b.date);
     managed.sort(byDate); umpired.sort(byDate);
-    return { games: out, managed, umpired,
+
+    // The log stands as its own page, so it carries the name and the other
+    // seasons with it rather than sending the reader back for them.
+    const base = (await people()).by.get(pid);
+    const c = await careers(pid), ro = await roles();
+    const seasons = [...new Set([
+      ...c.bat.filter(r => r.person === pid).map(r => r.season),
+      ...c.pit.filter(r => r.person === pid).map(r => r.season),
+      ...ro.mgr.filter(r => r.person === pid).map(r => r.season),
+      ...ro.ump.filter(r => r.person === pid).map(r => r.season),
+    ])].sort();
+
+    return { person: base ? { id: pid, name: nameOf(base) } : null, seasons,
+             games: out, managed, umpired,
              total: out.length + managed.length + umpired.length };
   }
 
