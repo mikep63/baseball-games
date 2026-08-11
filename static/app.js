@@ -17,14 +17,50 @@ function avg(h, ab) {
   return (h / ab).toFixed(3).replace(/^0/, '');
 }
 
+/* Blank, not 0.00, when the earned runs were never recorded: 1907 has them for
+   12 of its 3,229 pitching lines and 1908 for 15, so every pitcher in those
+   seasons summed to NULL and read as though he had allowed nothing. */
 function era(er, outs) {
-  if (!outs) return '';
+  if (!outs || er === null || er === undefined) return '';
   return (er * 27 / outs).toFixed(2);
 }
 
 function ip(outs) {
   if (outs === null || outs === undefined) return '';
   return Math.floor(outs / 3) + '.' + (outs % 3);
+}
+
+const rate3 = v => (v === null || !isFinite(v)) ? '' : v.toFixed(3).replace(/^0/, '');
+const rate2 = v => (v === null || !isFinite(v)) ? '' : v.toFixed(2);
+
+/* The rates the counting stats are actually read for. A season Retrosheet
+   never recorded sacrifice flies in leaves them out of the denominator rather
+   than counting them as none: that is what the NULL means, and adding a zero
+   would quietly inflate the on-base percentage of everyone before 1954. */
+const obpOf = r => {
+  const d = (r.ab || 0) + (r.bb || 0) + (r.hbp || 0) + (r.sf || 0);
+  return d ? ((r.h || 0) + (r.bb || 0) + (r.hbp || 0)) / d : null;
+};
+const slgOf = r => r.ab
+  ? ((r.h || 0) + (r.d || 0) + 2 * (r.t || 0) + 3 * (r.hr || 0)) / r.ab : null;
+const opsOf = r => {
+  const a = obpOf(r), b = slgOf(r);
+  return (a === null || b === null) ? null : a + b;
+};
+const whipOf = r => r.outs ? ((r.bb || 0) + (r.h || 0)) * 3 / r.outs : null;
+const fpctOf = r => {
+  const c = (r.po || 0) + (r.a || 0), t = c + (r.e || 0);
+  return t ? c / t : null;
+};
+
+/* Sum a column across season rows, keeping "not recorded" distinct from zero:
+   a career total of nothing but NULLs stays blank rather than becoming 0, so
+   Ruth is not credited with 0 sacrifice flies in an era that never counted
+   them. */
+function colSum(rs, k) {
+  let t = null;
+  for (const r of rs) if (r[k] !== null && r[k] !== undefined) t = (t || 0) + r[k];
+  return t;
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -710,6 +746,74 @@ async function viewGame(parts) {
 
 // ------------------------------------------------------------------- player
 
+/* The order a season's rounds are played in -- app.py's GAMETYPE_ORDER, so a
+   career reads down the calendar. */
+const TYPE_ORDER = ['regular', 'wildcard', 'division', 'lcs', 'worldseries',
+                    'allstar', 'negro'];
+const typeRank = t => (TYPE_ORDER.indexOf(t) + 1) || 99;
+
+/* Column orders follow baseball-records, so the two front ends put the same
+   number in the same place; the tail of each line is what this database has
+   and Lahman does not. */
+const BAT_HEAD = [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'G' }, { t: 'AB' },
+  { t: 'R' }, { t: 'H' }, { t: '2B' }, { t: '3B' }, { t: 'HR' }, { t: 'RBI' },
+  { t: 'SB' }, { t: 'CS' }, { t: 'BB' }, { t: 'SO' }, { t: 'AVG' }, { t: 'OBP' },
+  { t: 'SLG' }, { t: 'OPS' }, { t: 'GIDP' }, { t: 'HBP' }, { t: 'SH' }, { t: 'SF' }];
+
+const PIT_HEAD = [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'W' }, { t: 'L' },
+  { t: 'ERA' }, { t: 'G' }, { t: 'GS' }, { t: 'CG' }, { t: 'SHO' }, { t: 'SV' },
+  { t: 'IP' }, { t: 'H' }, { t: 'R' }, { t: 'ER' }, { t: 'HR' }, { t: 'BB' },
+  { t: 'SO' }, { t: 'HBP' }, { t: 'WP' }, { t: 'BF' }, { t: 'WHIP' }];
+
+const FLD_HEAD = [{ t: 'Season' }, { t: 'Pos', l: 1 }, { t: 'G' }, { t: 'Inn' },
+  { t: 'PO' }, { t: 'A' }, { t: 'E' }, { t: 'DP' }, { t: 'TP' }, { t: 'PB' },
+  { t: 'FPCT' }];
+
+/* Each line twice over: once for a season, once for the totals row, where the
+   rates have to be recomputed from the summed counts rather than averaged. */
+const batLine = (r, label) => [
+  label ?? r.season, label ? '' : teamLink(r.team, r.season, r.teamName),
+  n(r.g), n(r.ab), n(r.r), n(r.h), n(r.d), n(r.t), n(r.hr), n(r.rbi),
+  n(r.sb), n(r.cs), n(r.bb), n(r.so),
+  avg(r.h, r.ab), rate3(obpOf(r)), rate3(slgOf(r)), rate3(opsOf(r)),
+  n(r.gidp), n(r.hbp), n(r.sh), n(r.sf)];
+
+const pitLine = (r, label) => [
+  label ?? r.season, label ? '' : teamLink(r.team, r.season, r.teamName),
+  n(r.w), n(r.l), era(r.er, r.outs), n(r.g), n(r.gs), n(r.cg), n(r.sho), n(r.sv),
+  ip(r.outs), n(r.h), n(r.r), n(r.er), n(r.hr), n(r.bb), n(r.so),
+  n(r.hbp), n(r.wp), n(r.bfp), rate2(whipOf(r))];
+
+const fldLine = (r, label) => [
+  label ?? r.season, label ? '' : esc(r.position),
+  n(r.g), ip(r.outs), n(r.po), n(r.a), n(r.e), n(r.dp), n(r.tp), n(r.pb),
+  rate3(fpctOf(r))];
+
+/* One table per kind of game. Splitting them is not a nicety: 3,835 Negro
+   League games carry gametype 'negro' rather than 'regular', so a page that
+   showed the regular season alone showed Josh Gibson -- 495 games, 633 hits,
+   116 home runs -- an empty table, and Satchel Paige half a career. */
+function statSections(list, head, line) {
+  const by = new Map();
+  for (const r of list) {
+    if (!by.has(r.gametype)) by.set(r.gametype, []);
+    by.get(r.gametype).push(r);
+  }
+  const groups = [...by].sort((a, b) => typeRank(a[0]) - typeRank(b[0]));
+  const bare = groups.length === 1 && groups[0][0] === 'regular';
+  return groups.map(([type, rs]) => {
+    const totals = {};
+    for (const k of ['g', 'ab', 'r', 'h', 'd', 't', 'hr', 'rbi', 'sb', 'cs', 'bb',
+      'so', 'gidp', 'hbp', 'sh', 'sf', 'outs', 'er', 'bfp', 'wp', 'w', 'l', 'sv',
+      'gs', 'cg', 'sho', 'po', 'a', 'e', 'dp', 'tp', 'pb']) totals[k] = colSum(rs, k);
+    const rows = rs.map(r => ({ cells: line(r) }));
+    rows.push({ _cls: 'totals',
+                cells: line(totals, type === 'regular' ? 'Career' : 'Total') });
+    return (bare ? '' : `<h4>${esc(META.gametypes[type] || type)}</h4>`)
+      + table(head, rows);
+  }).join('');
+}
+
 async function viewPlayer(parts, q) {
   const id = parts[0];
   const d = await api('/player/' + id);
@@ -729,44 +833,21 @@ async function viewPlayer(parts, q) {
   // Hall of Fame membership is the pill next to his name; a row saying
   // "Hall of Fame: HOF" repeats it without adding anything.
 
-  const reg = r => r.gametype === 'regular';
-  const batRows = d.batting.filter(reg).map(r => ({
-    cells: [r.season, teamLink(r.team, r.season, r.teamName), r.g, n(r.ab), n(r.r), n(r.h),
-      n(r.d), n(r.t), n(r.hr), n(r.rbi), n(r.bb), n(r.so), n(r.sb), avg(r.h, r.ab)],
-  }));
-  const bsum = k => d.batting.filter(reg).reduce((a, r) => a + (r[k] || 0), 0);
-  if (batRows.length) batRows.push({ _cls: 'totals', cells: ['Career', '', bsum('g'),
-    bsum('ab'), bsum('r'), bsum('h'), bsum('d'), bsum('t'), bsum('hr'), bsum('rbi'),
-    bsum('bb'), bsum('so'), bsum('sb'), avg(bsum('h'), bsum('ab'))] });
-
-  const pitRows = d.pitching.filter(reg).map(r => ({
-    cells: [r.season, teamLink(r.team, r.season, r.teamName), r.g, ip(r.outs), n(r.h),
-      n(r.r), n(r.er), n(r.bb), n(r.so), n(r.hr), era(r.er, r.outs)],
-  }));
-  const psum = k => d.pitching.filter(reg).reduce((a, r) => a + (r[k] || 0), 0);
-  if (pitRows.length) pitRows.push({ _cls: 'totals', cells: ['Career', '', psum('g'),
-    ip(psum('outs')), psum('h'), psum('r'), psum('er'), psum('bb'), psum('so'),
-    psum('hr'), era(psum('er'), psum('outs'))] });
-
-  const fldRows = d.fielding.filter(reg).map(r => ({
-    cells: [r.season, r.position, r.g, ip(r.outs), n(r.po), n(r.a), n(r.e), n(r.dp)],
-  }));
+  const bat = statSections(d.batting, BAT_HEAD, batLine);
+  const pit = statSections(d.pitching, PIT_HEAD, pitLine);
+  const fld = statSections(d.fielding, FLD_HEAD, fldLine);
 
   /* A man who never came to the plate gets no batting table. Retrosheet
      writes a batting line for everyone who was in the game, so a modern
      relief pitcher otherwise collects a season row of zeroes for every year
      of his career. Asking for a plate appearance -- not merely a line --
      keeps every pitcher who did bat, which before the DH is all of them. */
-  const anyPA = d.batting.filter(reg).some(r =>
+  const anyPA = d.batting.some(r =>
     (r.ab || 0) + (r.bb || 0) + (r.hbp || 0) + (r.sh || 0) + (r.sf || 0) > 0);
-  const pitcherFirst = psum('outs') > 0 && bsum('ab') < 500;
-  const batting = (batRows.length && anyPA) ? `<h3>Batting</h3>${table(
-    [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'G' }, { t: 'AB' }, { t: 'R' }, { t: 'H' },
-     { t: '2B' }, { t: '3B' }, { t: 'HR' }, { t: 'RBI' }, { t: 'BB' }, { t: 'SO' },
-     { t: 'SB' }, { t: 'AVG' }], batRows)}` : '';
-  const pitching = pitRows.length ? `<h3>Pitching</h3>${table(
-    [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'G' }, { t: 'IP' }, { t: 'H' }, { t: 'R' },
-     { t: 'ER' }, { t: 'BB' }, { t: 'SO' }, { t: 'HR' }, { t: 'ERA' }], pitRows)}` : '';
+  const pitcherFirst = (colSum(d.pitching, 'outs') || 0) > 0
+                     && (colSum(d.batting, 'ab') || 0) < 500;
+  const batting = (bat && anyPA) ? `<h3>Batting</h3>${bat}` : '';
+  const pitching = pit ? `<h3>Pitching</h3>${pit}` : '';
 
   const years = d.seasons.map(y =>
     `<option value="${y}"${String(y) === season ? ' selected' : ''}>${y}</option>`).join('');
@@ -775,8 +856,7 @@ async function viewPlayer(parts, q) {
     <h2>${esc(p.name)}${p.hof ? '<span class="pill alt">HOF</span>' : ''}</h2>
     <div class="meta-grid">${bio.join('')}</div>
     ${pitcherFirst ? pitching + batting : batting + pitching}
-    ${fldRows.length ? `<h3>Fielding</h3>${table([{ t: 'Season' }, { t: 'Pos', l: 1 },
-      { t: 'G' }, { t: 'Inn' }, { t: 'PO' }, { t: 'A' }, { t: 'E' }, { t: 'DP' }], fldRows)}` : ''}
+    ${fld ? `<h3>Fielding</h3>${fld}` : ''}
     <h3>Game log</h3>
     <div class="controls">
       <label>Season<select id="gl-season">

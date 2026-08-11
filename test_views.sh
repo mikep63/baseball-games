@@ -40,6 +40,8 @@ for u in \
   "game/NYA195610080" \
   "player/ruthb101" \
   "player/ruthb101/games?season=1927" \
+  "player/gibsj101" \
+  "player/johnw102" \
   "team/NYA?season=1927" \
   "team/NYA" \
   "park/NYC16" \

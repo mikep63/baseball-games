@@ -350,6 +350,28 @@ PIT_TOTALS = """SUM(p.outs) outs, SUM(p.bfp) bfp, SUM(p.h) h, SUM(p.hr) hr,
                 SUM(p.r) r, SUM(p.er) er, SUM(p.bb) bb, SUM(p.so) so,
                 SUM(p.hbp) hbp, SUM(p.wp) wp, COUNT(*) g"""
 
+# W, L, SV, GS, CG and SHO -- the six numbers a pitching line is read for, and
+# the six Retrosheet does not put in the box score. They are properties of the
+# game rather than of his line in it: the decision is a column on `game`, and a
+# complete game is the fact that his side used nobody else. `mine` collapses to
+# one row per game first, because a pitcher who leaves and comes back has two
+# lines and must not be credited with two wins (16 such pairs in the file).
+PIT_DECISIONS = """
+    WITH mine AS (
+      SELECT p.game, p.side, MIN(p.seq) seq, SUM(p.r) r
+      FROM pit p WHERE p.person = :pid GROUP BY p.game, p.side),
+    staff AS (
+      SELECT p.game, p.side, COUNT(DISTINCT p.person) n
+      FROM pit p WHERE p.game IN (SELECT game FROM mine) GROUP BY p.game, p.side)
+    SELECT g.season, CASE m.side WHEN 0 THEN g.vis ELSE g.home END team,
+           g.gametype,
+           SUM(g.wp IS :pid) w, SUM(g.lp IS :pid) l, SUM(g.sv IS :pid) sv,
+           SUM(m.seq = 1) gs, SUM(s.n = 1) cg,
+           SUM(CASE WHEN s.n = 1 AND m.r = 0 THEN 1 ELSE 0 END) sho
+    FROM mine m JOIN game g ON g.id = m.game
+    JOIN staff s ON s.game = m.game AND s.side = m.side
+    GROUP BY g.season, team, g.gametype"""
+
 
 def api_player(pid, conn):
     """Bio, plus season-by-season totals rebuilt from the box-score lines.
@@ -376,11 +398,21 @@ def api_player(pid, conn):
         FROM pit p JOIN game g ON g.id = p.game
         WHERE p.person = ? GROUP BY g.season, team, g.gametype
         ORDER BY g.season, team""" % PIT_TOTALS, (pid,)))
+    # Splitting the decisions by season, club and game type is not tidiness:
+    # counted together, Rivera's 1997 reads 44 saves rather than the 43 he is
+    # credited with, the extra one being the All-Star Game.
+    dec = {(d["season"], d["team"], d["gametype"]): d
+           for d in rows(conn.execute(PIT_DECISIONS, {"pid": pid}))}
+    for r in pitching:
+        d = dec.get((r["season"], r["team"], r["gametype"]), {})
+        for k in ("w", "l", "sv", "gs", "cg", "sho"):
+            r[k] = d.get(k, 0)
     # Split by game type like batting and pitching: without it a World Series
     # ring's worth of putouts lands in the regular-season row.
     fielding = rows(conn.execute("""
         SELECT g.season, g.gametype, f.pos, COUNT(*) g, SUM(f.outs) outs,
-               SUM(f.po) po, SUM(f.a) a, SUM(f.e) e, SUM(f.dp) dp, SUM(f.pb) pb
+               SUM(f.po) po, SUM(f.a) a, SUM(f.e) e, SUM(f.dp) dp,
+               SUM(f.tp) tp, SUM(f.pb) pb
         FROM fld f JOIN game g ON g.id = f.game
         WHERE f.person = ? GROUP BY g.season, g.gametype, f.pos
         ORDER BY g.season, f.pos""", (pid,)))

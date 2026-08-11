@@ -157,9 +157,24 @@ async function main() {
     ['game — Larsen perfect game', () => V.viewGame(['NYA195610080']),
       h => h.includes('Don Larsen') && h.includes('linescore') && h.includes('Yankee Stadium')],
     ['player — Ruth, no season', () => V.viewPlayer(['ruthb101'], Q({})),
-      h => h.includes('Babe Ruth') && h.includes('Batting') && h.includes('Career')],
+      h => h.includes('Babe Ruth') && h.includes('Batting') && h.includes('Career')
+        // He pitched, so the decisions have to reach the table: 94-46 lifetime.
+        && h.includes('>OPS<') && h.includes('>SHO<')
+        // 15 World Series home runs are his record too, and they used to be
+        // filtered out of every table on the page.
+        && h.includes('World Series')],
     ['player — Ruth, 1927 log', () => V.viewPlayer(['ruthb101'], Q({ season: 1927 })),
       h => h.includes('Babe Ruth')],
+    /* Every one of his 495 games is gametype 'negro', so a page that showed
+       the regular season alone showed him nothing at all. */
+    ['player — Josh Gibson, Negro Leagues only', () => V.viewPlayer(['gibsj101'], Q({})),
+      h => h.includes('Josh Gibson') && h.includes('Negro Leagues')
+        && h.includes('>633<') && h.includes('>116<')],
+    /* A pitcher's line is read for W-L-ERA before anything else, and none of
+       the six are in Retrosheet's box score -- 1913 is 36-7, 36 GS, 29 CG,
+       11 SHO. */
+    ['player — Walter Johnson, decisions', () => V.viewPlayer(['johnw102'], Q({})),
+      h => h.includes('Walter Johnson') && h.includes('>417<') && h.includes('>110<')],
     ['team — 1927 Yankees', () => V.viewTeam(['NYA'], Q({ season: 1927 })),
       h => h.includes('Schedule') && h.includes('Roster') && h.includes('110')],
     ['team — season list', () => V.viewTeam(['NYA'], Q({})), h => h.includes('Season')],

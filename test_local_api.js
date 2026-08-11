@@ -114,10 +114,16 @@ async function main() {
      'person.deathdate', 'person.play_debut', 'person.play_last',
      'seasons.0', 'seasons.10',
      ...rowPaths('batting', 22, ['season', 'team', 'teamName', 'gametype', 'g', 'ab',
-                                 'r', 'h', 'hr', 'rbi', 'bb', 'so', 'sb']),
-     ...rowPaths('pitching', 10, ['season', 'team', 'g', 'outs', 'h', 'er', 'so']),
+                                 'r', 'h', 'hr', 'rbi', 'bb', 'so', 'sb', 'cs',
+                                 'hbp', 'sh', 'sf', 'gidp']),
+     // W, L, SV, GS, CG and SHO are derived rather than summed -- app.py works
+     // them out per request and build_site.py precomputes them for everyone at
+     // once, which is exactly the shape of disagreement this file exists for.
+     ...rowPaths('pitching', 10, ['season', 'team', 'g', 'outs', 'h', 'er', 'so',
+                                  'bfp', 'hbp', 'wp', 'w', 'l', 'sv', 'gs', 'cg',
+                                  'sho']),
      ...rowPaths('fielding', 12, ['season', 'gametype', 'pos', 'position', 'g',
-                                  'po', 'a', 'e'])]);
+                                  'po', 'a', 'e', 'dp', 'tp', 'pb'])]);
 
   // --- a game log
   compare('/player/ruthb101/games?season=1927',

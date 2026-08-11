@@ -107,20 +107,37 @@ def export_careers(conn):
         SELECT b.person, g.season, CASE b.side WHEN 0 THEN g.vis ELSE g.home END,
                g.gametype, COUNT(*), SUM(b.ab), SUM(b.r), SUM(b.h), SUM(b.d),
                SUM(b.t), SUM(b.hr), SUM(b.rbi), SUM(b.bb), SUM(b.so), SUM(b.sb),
-               SUM(b.hbp), SUM(b.sh), SUM(b.sf)
+               SUM(b.cs), SUM(b.hbp), SUM(b.sh), SUM(b.sf), SUM(b.gidp)
         FROM bat b JOIN game g ON g.id = b.game
         GROUP BY b.person, g.season, 3, g.gametype
         ORDER BY b.person, g.season""").fetchall()
     pit = conn.execute("""
         SELECT p.person, g.season, CASE p.side WHEN 0 THEN g.vis ELSE g.home END,
                g.gametype, COUNT(*), SUM(p.outs), SUM(p.h), SUM(p.r), SUM(p.er),
-               SUM(p.bb), SUM(p.so), SUM(p.hr)
+               SUM(p.bb), SUM(p.so), SUM(p.hr), SUM(p.bfp), SUM(p.hbp), SUM(p.wp)
         FROM pit p JOIN game g ON g.id = p.game
         GROUP BY p.person, g.season, 3, g.gametype
         ORDER BY p.person, g.season""").fetchall()
+    # app.py's PIT_DECISIONS, for everyone at once. Same shape, same answers --
+    # test_local_api.js is what holds the two to it.
+    dec = {r[:4]: r[4:] for r in conn.execute("""
+        WITH mine AS (
+          SELECT game, side, person, MIN(seq) seq, SUM(r) r
+          FROM pit GROUP BY game, side, person),
+        staff AS (
+          SELECT game, side, COUNT(DISTINCT person) n FROM pit GROUP BY game, side)
+        SELECT m.person, g.season,
+               CASE m.side WHEN 0 THEN g.vis ELSE g.home END, g.gametype,
+               SUM(g.wp IS m.person), SUM(g.lp IS m.person), SUM(g.sv IS m.person),
+               SUM(m.seq = 1), SUM(s.n = 1),
+               SUM(CASE WHEN s.n = 1 AND m.r = 0 THEN 1 ELSE 0 END)
+        FROM mine m JOIN game g ON g.id = m.game
+        JOIN staff s ON s.game = m.game AND s.side = m.side
+        GROUP BY m.person, g.season, 3, g.gametype""")}
+    pit = [list(r) + list(dec.get(tuple(r[:4]), (0, 0, 0, 0, 0, 0))) for r in pit]
     fld = conn.execute("""
         SELECT f.person, g.season, g.gametype, f.pos, COUNT(*), SUM(f.outs),
-               SUM(f.po), SUM(f.a), SUM(f.e), SUM(f.dp), SUM(f.pb)
+               SUM(f.po), SUM(f.a), SUM(f.e), SUM(f.dp), SUM(f.tp), SUM(f.pb)
         FROM fld f JOIN game g ON g.id = f.game
         GROUP BY f.person, g.season, g.gametype, f.pos
         ORDER BY f.person, g.season, f.pos""").fetchall()
@@ -137,12 +154,14 @@ def export_careers(conn):
         path = os.path.join(CAREERS, letter + ".json")
         size = write(path, {
             "batC": ["person", "season", "team", "gametype", "g", "ab", "r", "h",
-                     "d", "t", "hr", "rbi", "bb", "so", "sb", "hbp", "sh", "sf"],
+                     "d", "t", "hr", "rbi", "bb", "so", "sb", "cs", "hbp", "sh",
+                     "sf", "gidp"],
             "bat": d["bat"],
             "pitC": ["person", "season", "team", "gametype", "g", "outs", "h", "r",
-                     "er", "bb", "so", "hr"], "pit": d["pit"],
+                     "er", "bb", "so", "hr", "bfp", "hbp", "wp",
+                     "w", "l", "sv", "gs", "cg", "sho"], "pit": d["pit"],
             "fldC": ["person", "season", "gametype", "pos", "g", "outs", "po",
-                     "a", "e", "dp", "pb"],
+                     "a", "e", "dp", "tp", "pb"],
             "fld": d["fld"]})
         biggest = max(biggest, size)
     print("  %-22s %9.1f KB  %s"

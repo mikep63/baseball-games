@@ -30,7 +30,7 @@ respectively, both entirely derived, both one command away.
 |---|---|
 | **Games** | every game, filterable by season, club, park, date and type |
 | **Game** | line score, both box scores, itemised HR/SB/CS/DP/HBP, umpires, weather, attendance |
-| **Player** | bio, season-by-season batting/pitching/fielding, and every game he played |
+| **Player** | bio, season-by-season batting/pitching/fielding — one table per kind of game — and every game he played |
 | **Team** | a club's season: schedule, running record, roster |
 | **Park** | where it was, what was played there, attendance by season |
 
@@ -84,6 +84,17 @@ Worth knowing before trusting a number:
 - **Negro League games are not in the game logs at all.** Their headers here are
   synthesised from the box-score files, and Retrosheet notes most were deduced
   from newspaper accounts.
+- **Earned runs effectively start in 1909.** 1907 records them for 12 of its
+  3,229 pitching lines and 1908 for 15, and 1909 for 60%. A season that has
+  none sums to NULL and shows no ERA at all; 1909 sums what it has, so an ERA
+  for that season is a partial numerator over a whole denominator and reads far
+  too low. Everything from 1910 is complete.
+- **Wins, losses, saves, starts, complete games and shutouts are derived, not
+  read.** No box score carries them: the decision is a column on the game, and a
+  complete game is the fact that his side used nobody else. They are counted per
+  season, club and round, which is what makes them agree with the published
+  record — lumping the rounds together gives Rivera 44 saves in 1997 rather than
+  43, the extra one being the All-Star Game.
 - **Retrosheet publishes no season or career totals.** Everything here is summed
   from individual game lines, so totals differ from the official record wherever
   Retrosheet's box scores do — and `data/retrosheet/discrepancies/` is
