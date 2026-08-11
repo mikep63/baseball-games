@@ -42,6 +42,10 @@ for u in \
   "player/ruthb101/games?season=1927" \
   "player/gibsj101" \
   "player/johnw102" \
+  "player/lasot101" \
+  "player/lasot101/games?season=1977" \
+  "player/klemb901" \
+  "player/klemb901/games?season=1905" \
   "team/NYA?season=1927" \
   "team/NYA" \
   "park/NYC16" \

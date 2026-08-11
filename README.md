@@ -30,7 +30,7 @@ respectively, both entirely derived, both one command away.
 |---|---|
 | **Games** | every game, filterable by season, club, park, date and type |
 | **Game** | line score, both box scores, itemised HR/SB/CS/DP/HBP, umpires, weather, attendance |
-| **Player** | bio, season-by-season batting/pitching/fielding — one table per kind of game — and every game he played |
+| **Player** | bio, season-by-season batting/pitching/fielding/managing/umpiring — one table per kind of game — and every game he took part in |
 | **Team** | a club's season: schedule, running record, roster |
 | **Park** | where it was, what was played there, attendance by season |
 
@@ -95,6 +95,12 @@ Worth knowing before trusting a number:
   season, club and round, which is what makes them agree with the published
   record — lumping the rounds together gives Rivera 44 saves in 1997 rather than
   43, the extra one being the All-Star Game.
+- **Managers and umpires are on every game; coaches are on none.** 2,709 people
+  in the database never played, and their record is counted the same way a
+  pitcher's decisions are — from the game rather than from a box score. The
+  1,903 coaches have their dates from the biography file and nothing else,
+  because no game file names a coach, and the page says so rather than showing
+  an empty picker.
 - **Retrosheet publishes no season or career totals.** Everything here is summed
   from individual game lines, so totals differ from the official record wherever
   Retrosheet's box scores do — and `data/retrosheet/discrepancies/` is

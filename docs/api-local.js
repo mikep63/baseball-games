@@ -86,6 +86,16 @@ window.LocalAPI = (function () {
     }
     return _careerShards.get(letter);
   }
+  /* Managing and umpiring, one small file for everyone rather than a shard
+     per initial: 15,000 rows against the careers' 140,000. */
+  let _roles = null;
+  async function roles() {
+    if (!_roles) {
+      const r = await load('roles.json');
+      _roles = { mgr: rows(r, 'mgrC', 'mgr'), ump: rows(r, 'umpC', 'ump') };
+    }
+    return _roles;
+  }
   async function bio() {
     if (!_bio) {
       const b = await load('bio.json');
@@ -279,7 +289,7 @@ window.LocalAPI = (function () {
     });
 
     const who = {};
-    ['wp', 'lp', 'sv', 'ump_hp', 'ump_1b', 'ump_2b', 'ump_3b',
+    ['wp', 'lp', 'sv', 'ump_hp', 'ump_1b', 'ump_2b', 'ump_3b', 'ump_lf', 'ump_rf',
      'mgr_vis', 'mgr_home', 'vis_sp', 'home_sp'].forEach(k => {
       who[k] = g[k] ? nameOf(pe.get(g[k])) : null;
     });
@@ -310,14 +320,23 @@ window.LocalAPI = (function () {
       bats: b.bats, throws: b.throws, height: b.height, weight: b.weight,
       birthdate: b.birthdate, birth_city: b.birthCity, birth_state: b.birthState,
       birth_country: b.birthCountry, deathdate: b.deathdate,
+      mgr_debut: b.mgrDebut, mgr_last: b.mgrLast,
+      coach_debut: b.coachDebut, coach_last: b.coachLast,
+      ump_debut: b.umpDebut, ump_last: b.umpLast,
     };
     const batting = c.bat.filter(r => r.person === pid).map(r => Object.assign({}, r));
     const pitching = c.pit.filter(r => r.person === pid).map(r => Object.assign({}, r));
     const fielding = c.fld.filter(r => r.person === pid).map(r =>
       Object.assign({}, r, { position: POSITIONS[r.pos] || String(r.pos) }));
-    for (const r of batting.concat(pitching)) r.teamName = await teamName(r.team, r.season);
-    const seasons = [...new Set(batting.concat(pitching).map(r => r.season))].sort();
-    return { person, batting, pitching, fielding, seasons };
+    const ro = await roles();
+    const managing = ro.mgr.filter(r => r.person === pid).map(r => Object.assign({}, r));
+    const umpiring = ro.ump.filter(r => r.person === pid).map(r => Object.assign({}, r));
+    for (const r of batting.concat(pitching, managing)) {
+      r.teamName = await teamName(r.team, r.season);
+    }
+    const seasons = [...new Set(batting.concat(pitching, managing, umpiring)
+      .map(r => r.season))].sort();
+    return { person, batting, pitching, fielding, managing, umpiring, seasons };
   }
 
   async function playerGames(pid, q) {
@@ -352,7 +371,42 @@ window.LocalAPI = (function () {
       });
     }
     out.sort((a, b) => a.date.localeCompare(b.date));
-    return { games: out, total: out.length };
+
+    // The same season from the bench and from behind the plate, kept apart
+    // from the playing log the way app.py keeps them.
+    const UMP = [['ump_hp', 'HP'], ['ump_1b', '1B'], ['ump_2b', '2B'],
+                 ['ump_3b', '3B'], ['ump_lf', 'LF'], ['ump_rf', 'RF']];
+    const managed = [], umpired = [];
+    for (const g of s.games) {
+      const home = g.mgr_home === pid;
+      if (home || g.mgr_vis === pid) {
+        const team = home ? g.home : g.vis, opp = home ? g.vis : g.home;
+        const us = home ? g.home_score : g.vis_score;
+        const them = home ? g.vis_score : g.home_score;
+        managed.push({
+          id: g.id, date: g.date, season: yr, gametype: g.gametype,
+          vis: g.vis, home: g.home, vis_score: g.vis_score,
+          home_score: g.home_score, park: g.park, team, opp, side: home ? 1 : 0,
+          result: (us == null || them == null) ? null
+            : us > them ? 'W' : us < them ? 'L' : 'T',
+          teamName: await teamName(team, yr), oppName: await teamName(opp, yr),
+          visName: await teamName(g.vis, yr), homeName: await teamName(g.home, yr),
+        });
+      }
+      const at = UMP.find(([k]) => g[k] === pid);
+      if (at) {
+        umpired.push({
+          id: g.id, date: g.date, season: yr, gametype: g.gametype,
+          vis: g.vis, home: g.home, vis_score: g.vis_score,
+          home_score: g.home_score, park: g.park, position: at[1],
+          visName: await teamName(g.vis, yr), homeName: await teamName(g.home, yr),
+        });
+      }
+    }
+    const byDate = (a, b) => a.date.localeCompare(b.date);
+    managed.sort(byDate); umpired.sort(byDate);
+    return { games: out, managed, umpired,
+             total: out.length + managed.length + umpired.length };
   }
 
   async function team(code, q) {

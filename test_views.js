@@ -175,6 +175,32 @@ async function main() {
        11 SHO. */
     ['player — Walter Johnson, decisions', () => V.viewPlayer(['johnw102'], Q({})),
       h => h.includes('Walter Johnson') && h.includes('>417<') && h.includes('>110<')],
+    /* 2,709 people in the database never played a game, and their pages used
+       to be a name and a birthplace. Lasorda pitched for three seasons and
+       managed for twenty-one, so he gets both records and both game logs. */
+    ['player — Lasorda, managing record', () => V.viewPlayer(['lasot101'], Q({})),
+      // 1,598-1,437 with two ties, and the bio line for the years he coached.
+      h => h.includes('Tom Lasorda') && h.includes('Managing')
+        && h.includes('>1598<') && h.includes('>1437<') && h.includes('Coached')
+        // He pitched in 1954-56, so the playing tables are there too.
+        && h.includes('Pitching')],
+    /* 162 regular-season games, four in the LCS and six in the World Series.
+       Totalled together that is 103-69; split, the regular season reads the
+       98-64 he is credited with. */
+    ['player — Lasorda, 1977 managed log', () =>
+      V.viewPlayer(['lasot101'], Q({ season: 1977 })),
+      h => h.includes('172 games in 1977') && h.includes('98–64')
+        && h.includes('World Series') && !h.includes('103–69')],
+    ['player — Klem, umpiring record', () => V.viewPlayer(['klemb901'], Q({})),
+      // 5,369 regular-season games, 3,544 of them behind the plate.
+      h => h.includes('Bill Klem') && h.includes('Umpiring')
+        && h.includes('Umpired') && h.includes('>5369<') && h.includes('>3544<')
+        // Never played, so no batting, pitching or fielding table at all.
+        && !h.includes('>AVG<') && !h.includes('>ERA<')],
+    /* Crews were two men in 1905, so the plate and first base carry the
+       season and second and third stay empty. */
+    ['player — Klem, 1905 umpired log', () => V.viewPlayer(['klemb901'], Q({ season: 1905 })),
+      h => h.includes('151 games in 1905') && h.includes('>HP<')],
     ['team — 1927 Yankees', () => V.viewTeam(['NYA'], Q({ season: 1927 })),
       h => h.includes('Schedule') && h.includes('Roster') && h.includes('110')],
     ['team — season list', () => V.viewTeam(['NYA'], Q({})), h => h.includes('Season')],

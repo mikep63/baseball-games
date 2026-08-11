@@ -771,6 +771,16 @@ const FLD_HEAD = [{ t: 'Season' }, { t: 'Pos', l: 1 }, { t: 'G' }, { t: 'Inn' },
   { t: 'PO' }, { t: 'A' }, { t: 'E' }, { t: 'DP' }, { t: 'TP' }, { t: 'PB' },
   { t: 'FPCT' }];
 
+const MGR_HEAD = [{ t: 'Season' }, { t: 'Team', l: 1 }, { t: 'W' }, { t: 'L' },
+  { t: 'T' }, { t: 'PCT' }, { t: 'G' }];
+
+/* A man works one position in a game, so the positions sum to the games. The
+   outfield pair only ever fills for a six-man crew, and the columns stand
+   empty for the two-man crews of before 1912 -- which is the record, not a
+   gap in it. */
+const UMP_HEAD = [{ t: 'Season' }, { t: 'G' }, { t: 'HP' }, { t: '1B' },
+  { t: '2B' }, { t: '3B' }, { t: 'LF' }, { t: 'RF' }];
+
 /* Each line twice over: once for a season, once for the totals row, where the
    rates have to be recomputed from the summed counts rather than averaged. */
 const batLine = (r, label) => [
@@ -791,6 +801,18 @@ const fldLine = (r, label) => [
   n(r.g), ip(r.outs), n(r.po), n(r.a), n(r.e), n(r.dp), n(r.tp), n(r.pb),
   rate3(fpctOf(r))];
 
+// Ties are not a rounding error in the early game -- McGraw's 1899 has four --
+// so they get a column, and the percentage is of decisions, as it is recorded.
+const mgrLine = (r, label) => [
+  label ?? r.season, label ? '' : teamLink(r.team, r.season, r.teamName),
+  n(r.w), n(r.l), n(r.t),
+  rate3((r.w || 0) + (r.l || 0) ? (r.w || 0) / ((r.w || 0) + (r.l || 0)) : null),
+  n(r.g)];
+
+const umpLine = (r, label) => [
+  label ?? r.season, n(r.g), n(r.hp), n(r.b1), n(r.b2), n(r.b3),
+  n(r.lf), n(r.rf)];
+
 /* One table per kind of game. Splitting them is not a nicety: 3,835 Negro
    League games carry gametype 'negro' rather than 'regular', so a page that
    showed the regular season alone showed Josh Gibson -- 495 games, 633 hits,
@@ -807,7 +829,8 @@ function statSections(list, head, line) {
     const totals = {};
     for (const k of ['g', 'ab', 'r', 'h', 'd', 't', 'hr', 'rbi', 'sb', 'cs', 'bb',
       'so', 'gidp', 'hbp', 'sh', 'sf', 'outs', 'er', 'bfp', 'wp', 'w', 'l', 'sv',
-      'gs', 'cg', 'sho', 'po', 'a', 'e', 'dp', 'tp', 'pb']) totals[k] = colSum(rs, k);
+      'gs', 'cg', 'sho', 'po', 'a', 'e', 'dp', 'tp', 'pb',
+      'hp', 'b1', 'b2', 'b3', 'lf', 'rf']) totals[k] = colSum(rs, k);
     const rows = rs.map(r => ({ cells: line(r) }));
     rows.push({ _cls: 'totals',
                 cells: line(totals, type === 'regular' ? 'Career' : 'Total') });
@@ -832,12 +855,22 @@ async function viewPlayer(parts, q) {
     p.weight ? p.weight + ' lb' : ''].filter(Boolean).join(', '));
   add('Debut', p.play_debut ? niceDate(p.play_debut) : '');
   add('Last game', p.play_last ? niceDate(p.play_last) : '');
+  /* The other three ways to spend a career. Coaching is dates and nothing
+     else -- no game file names a coach -- so for the 1,903 of them this line
+     is the whole record, which is reason enough to print it. */
+  const span = (a, b) => !a ? ''
+    : niceDate(a) + (b && b !== a ? ' – ' + niceDate(b) : '');
+  add('Managed', span(p.mgr_debut, p.mgr_last));
+  add('Coached', span(p.coach_debut, p.coach_last));
+  add('Umpired', span(p.ump_debut, p.ump_last));
   // Hall of Fame membership is the pill next to his name; a row saying
   // "Hall of Fame: HOF" repeats it without adding anything.
 
   const bat = statSections(d.batting, BAT_HEAD, batLine);
   const pit = statSections(d.pitching, PIT_HEAD, pitLine);
   const fld = statSections(d.fielding, FLD_HEAD, fldLine);
+  const mgr = statSections(d.managing || [], MGR_HEAD, mgrLine);
+  const ump = statSections(d.umpiring || [], UMP_HEAD, umpLine);
 
   /* A man who never came to the plate gets no batting table. Retrosheet
      writes a batting line for everyone who was in the game, so a modern
@@ -859,6 +892,8 @@ async function viewPlayer(parts, q) {
     <div class="meta-grid">${bio.join('')}</div>
     ${pitcherFirst ? pitching + batting : batting + pitching}
     ${fld ? `<h3>Fielding</h3>${fld}` : ''}
+    ${mgr ? `<h3>Managing</h3>${mgr}` : ''}
+    ${ump ? `<h3>Umpiring</h3>${ump}` : ''}
     <h3>Game log</h3>
     <div class="controls">
       <label>Season<select id="gl-season">
@@ -872,8 +907,13 @@ async function viewPlayer(parts, q) {
     location.hash = `#/player/${id}?${p2}`;
   });
   if (season) await renderGameLog(id, season);
-  else document.getElementById('gamelog').innerHTML =
-    '<p class="note">Pick a season to see every game he played in it.</p>';
+  else document.getElementById('gamelog').innerHTML = d.seasons.length
+    ? '<p class="note">Pick a season to see every game he took part in.</p>'
+    /* A coach, and nothing else. Retrosheet's biography file has his dates but
+       no game file names a coach, so there is no season to offer and saying so
+       beats an empty picker. */
+    : '<p class="empty">No games on file — the game files record players, '
+      + 'managers and umpires, but not coaches.</p>';
 }
 
 /* One table per way he took part. A hitter's log has no business carrying
@@ -894,20 +934,62 @@ async function renderGameLog(id, season) {
   /* A season's games include October. Totalling the World Series into the
      regular-season line is the same mistake the team record made, and this is
      where it would show up on a player's page, so each game type gets its own
-     section and its own totals. The games arrive in date order, so regular
-     season leads and the rounds follow in the order they were played. */
+     section and its own totals -- and that goes for the games he managed as
+     much as the ones he played, or Lasorda's 1977 reads 103-69 rather than
+     the 98-64 he is credited with.
+
+     All three roles bucket together, because a man can hold more than one in
+     a season: a player-manager, of whom there are plenty before the war, and
+     Rose as late as 1986. Within a round they are named only if he did in
+     fact do more than one thing. */
   const byType = new Map();
-  for (const g of d.games) {
-    if (!byType.has(g.gametype)) byType.set(g.gametype, []);
-    byType.get(g.gametype).push(g);
-  }
+  const bucket = t => {
+    if (!byType.has(t)) byType.set(t, { play: [], mgr: [], ump: [] });
+    return byType.get(t);
+  };
+  for (const g of d.games) bucket(g.gametype).play.push(g);
+  for (const g of (d.managed || [])) bucket(g.gametype).mgr.push(g);
+  for (const g of (d.umpired || [])) bucket(g.gametype).ump.push(g);
+  const types = [...byType].sort((a, b) => typeRank(a[0]) - typeRank(b[0]));
+
   const out = [];
-  for (const [type, games] of byType) {
-    const html = logTables(games, common, HEAD);
-    if (!html) continue;
-    out.push(byType.size > 1
-      ? `<h4>${esc(META.gametypes[type] || type)}</h4>${html}` : html);
+  for (const [type, b] of types) {
+    const play = logTables(b.play, common, HEAD);
+    const roles = (play ? 1 : 0) + (b.mgr.length ? 1 : 0) + (b.ump.length ? 1 : 0);
+    const parts = [];
+    if (play) parts.push((roles > 1 ? '<h5>Playing</h5>' : '') + play);
+    if (b.mgr.length) {
+      const rows = b.mgr.map(g => ({ cells: [
+        gameLink(g.id, niceDate(g.date)),
+        teamLink(g.team, g.season, g.teamName),
+        (g.side === 0 ? 'at ' : 'vs ') + esc(g.oppName),
+        `${n(g.vis_score)}–${n(g.home_score)}`,
+        g.result ? `<span class="result-${g.result}">${g.result}</span>` : '',
+      ] }));
+      const tally = k => b.mgr.filter(g => g.result === k).length;
+      rows.push({ _cls: 'totals', cells: [`${b.mgr.length} games`, '', '', '',
+        `${tally('W')}–${tally('L')}${tally('T') ? '–' + tally('T') : ''}`] });
+      parts.push((roles > 1 ? '<h5>Managing</h5>' : '') + table(
+        [{ t: 'Date', l: 1 }, { t: 'Team', l: 1 }, { t: 'Opponent', l: 1 },
+         { t: 'Score' }, { t: 'Result' }], rows));
+    }
+    if (b.ump.length) {
+      const rows = b.ump.map(g => ({ cells: [
+        gameLink(g.id, niceDate(g.date)),
+        `${esc(g.visName)} at ${esc(g.homeName)}`,
+        `${n(g.vis_score)}–${n(g.home_score)}`,
+        esc(g.position),
+      ] }));
+      rows.push({ _cls: 'totals', cells: [`${b.ump.length} games`, '', '', ''] });
+      parts.push((roles > 1 ? '<h5>Umpiring</h5>' : '') + table(
+        [{ t: 'Date', l: 1 }, { t: 'Game', l: 1 }, { t: 'Score' },
+         { t: 'Pos' }], rows));
+    }
+    if (!parts.length) continue;
+    out.push((types.length > 1
+      ? `<h4>${esc(META.gametypes[type] || type)}</h4>` : '') + parts.join(''));
   }
+
   document.getElementById('gamelog').innerHTML = out.length
     ? `<p class="note">${d.total} games in ${season}.</p>` + out.join('')
     : '<p class="empty">No games that season.</p>';

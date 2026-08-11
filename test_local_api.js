@@ -101,7 +101,11 @@ async function main() {
     ['game.visName', 'game.homeName', 'game.vis_score', 'game.home_score',
      'game.gametypeLabel', 'game.attendance', 'game.duration', 'game.v_h', 'game.h_e',
      'game.visLine.0', 'game.homeLine.3', 'park.name',
-     'people.wp', 'people.lp', 'people.ump_hp', 'people.mgr_home',
+     // Larsen's perfect game had a six-man crew. The export carried four of
+     // them for as long as it existed, and this line is why that went unseen.
+     'people.wp', 'people.lp', 'people.ump_hp', 'people.ump_1b', 'people.ump_2b',
+     'people.ump_3b', 'people.ump_lf', 'people.ump_rf',
+     'people.mgr_vis', 'people.mgr_home',
      ...rowPaths('batting', 10, ['person', 'name', 'side', 'ab', 'r', 'h', 'rbi',
                                  'bb', 'so', 'hr', 'positions.0', 'pinchHitInning']),
      ...rowPaths('pitching', 2, ['person', 'name', 'outs', 'h', 'bb', 'so', 'er', 'bfp']),
@@ -124,6 +128,30 @@ async function main() {
                                   'sho']),
      ...rowPaths('fielding', 12, ['season', 'gametype', 'pos', 'position', 'g',
                                   'po', 'a', 'e', 'dp', 'tp', 'pb'])]);
+
+  // --- the two roles that are not playing. 2,709 people have no batting line
+  // at all, and these are the only records their pages can show.
+  compare('/player/lasot101', await API.get('/player/lasot101'),
+    fixture('player_lasot101'),
+    ['person.name', 'person.mgr_debut', 'person.mgr_last', 'seasons.0',
+     ...rowPaths('managing', 24, ['season', 'team', 'teamName', 'gametype',
+                                  'g', 'w', 'l', 't'])]);
+  compare('/player/lasot101/games?season=1977',
+    await API.get('/player/lasot101/games?season=1977'),
+    fixture('player_lasot101_games_season_1977'),
+    ['total', ...rowPaths('managed', 20, ['id', 'date', 'team', 'teamName',
+                                          'opp', 'oppName', 'side', 'result',
+                                          'vis_score', 'home_score'])]);
+  compare('/player/klemb901', await API.get('/player/klemb901'),
+    fixture('player_klemb901'),
+    ['person.name', 'person.ump_debut', 'person.ump_last',
+     ...rowPaths('umpiring', 30, ['season', 'gametype', 'g', 'hp', 'b1', 'b2',
+                                  'b3', 'lf', 'rf'])]);
+  compare('/player/klemb901/games?season=1905',
+    await API.get('/player/klemb901/games?season=1905'),
+    fixture('player_klemb901_games_season_1905'),
+    ['total', ...rowPaths('umpired', 20, ['id', 'date', 'position', 'visName',
+                                          'homeName', 'vis_score', 'home_score'])]);
 
   // --- a game log
   compare('/player/ruthb101/games?season=1927',

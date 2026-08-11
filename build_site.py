@@ -41,6 +41,12 @@ CAREERS = os.path.join(DATA, "careers")
 GAME_COLS = ("id,date,number,gametype,vis,home,vis_score,home_score,park,"
              "attendance,duration,vis_line,home_line,has_box,has_pbp,daynight,"
              "temp,sky,wind_speed,start_time,ump_hp,ump_1b,ump_2b,ump_3b,"
+             # The outfield pair is only used by a six-man crew -- 1,947 games,
+             # all of them October or the All-Star Game -- but dropping them
+             # cost Larsen's perfect game two of its six umpires here while
+             # app.py named all six, and put an umpire's own World Series
+             # games outside his log.
+             "ump_lf,ump_rf,"
              "mgr_vis,mgr_home,wp,lp,sv,vis_sp,home_sp,v_h,v_e,h_h,h_e")
 # seq is dropped -- the export is written in lineup order, so the array index
 # carries it. slot is kept because it is not decoration: Retrosheet writes 0
@@ -91,12 +97,14 @@ def export_bio(conn):
     """The fuller biography, only needed once a player page is open."""
     rows = conn.execute("""
         SELECT id, bats, throws, height, weight, birthdate, birth_city,
-               birth_state, birth_country, deathdate, birth_name
+               birth_state, birth_country, deathdate, birth_name,
+               mgr_debut, mgr_last, coach_debut, coach_last, ump_debut, ump_last
         FROM person ORDER BY id""").fetchall()
     path = os.path.join(DATA, "bio.json")
     write(path, {"c": ["id", "bats", "throws", "height", "weight", "birthdate",
                        "birthCity", "birthState", "birthCountry", "deathdate",
-                       "birthName"],
+                       "birthName", "mgrDebut", "mgrLast", "coachDebut",
+                       "coachLast", "umpDebut", "umpLast"],
                  "r": [list(r) for r in rows]})
     report("bio.json", path)
 
@@ -167,6 +175,48 @@ def export_careers(conn):
     print("  %-22s %9.1f KB  %s"
           % ("careers/ (%d shards)" % len(shards), biggest / 1024,
              "largest; %s batting rows in all" % f"{len(bat):,}"))
+
+
+def export_roles(conn):
+    """Managing and umpiring records -- app.py's MGR_RECORD and UMP_RECORD for
+    everyone at once. 2,709 people in the database never played a game, and
+    without this their pages are a name and a birthplace. Small enough to go
+    unsharded: 5,100 managing rows and 9,670 umpiring ones against the 140,780
+    batting rows that needed twenty-six files."""
+    mgr = conn.execute("""
+        SELECT p, season, team, gametype, COUNT(*), SUM(w), SUM(l), SUM(t)
+        FROM (SELECT mgr_home p, season, home team, gametype,
+                     CASE WHEN home_score > vis_score THEN 1 ELSE 0 END w,
+                     CASE WHEN home_score < vis_score THEN 1 ELSE 0 END l,
+                     CASE WHEN home_score = vis_score THEN 1 ELSE 0 END t
+              FROM game WHERE mgr_home IS NOT NULL
+              UNION ALL
+              SELECT mgr_vis, season, vis, gametype,
+                     CASE WHEN vis_score > home_score THEN 1 ELSE 0 END,
+                     CASE WHEN vis_score < home_score THEN 1 ELSE 0 END,
+                     CASE WHEN home_score = vis_score THEN 1 ELSE 0 END
+              FROM game WHERE mgr_vis IS NOT NULL)
+        GROUP BY p, season, team, gametype ORDER BY p, season, team""").fetchall()
+    ump = conn.execute("""
+        SELECT p, season, gametype, COUNT(*),
+               SUM(pos = 'HP'), SUM(pos = '1B'), SUM(pos = '2B'),
+               SUM(pos = '3B'), SUM(pos = 'LF'), SUM(pos = 'RF')
+        FROM (SELECT ump_hp p, season, gametype, 'HP' pos FROM game WHERE ump_hp IS NOT NULL
+              UNION ALL SELECT ump_1b, season, gametype, '1B' FROM game WHERE ump_1b IS NOT NULL
+              UNION ALL SELECT ump_2b, season, gametype, '2B' FROM game WHERE ump_2b IS NOT NULL
+              UNION ALL SELECT ump_3b, season, gametype, '3B' FROM game WHERE ump_3b IS NOT NULL
+              UNION ALL SELECT ump_lf, season, gametype, 'LF' FROM game WHERE ump_lf IS NOT NULL
+              UNION ALL SELECT ump_rf, season, gametype, 'RF' FROM game WHERE ump_rf IS NOT NULL)
+        GROUP BY p, season, gametype ORDER BY p, season""").fetchall()
+    path = os.path.join(DATA, "roles.json")
+    write(path, {
+        "mgrC": ["person", "season", "team", "gametype", "g", "w", "l", "t"],
+        "mgr": [list(r) for r in mgr],
+        "umpC": ["person", "season", "gametype", "g", "hp", "b1", "b2", "b3",
+                 "lf", "rf"],
+        "ump": [list(r) for r in ump]})
+    report("roles.json", path,
+           "%s managing, %s umpiring rows" % (f"{len(mgr):,}", f"{len(ump):,}"))
 
 
 def export_reference(conn):
@@ -354,6 +404,7 @@ def main():
     export_people(conn)
     export_bio(conn)
     export_careers(conn)
+    export_roles(conn)
     export_reference(conn)
 
     print("Season shards")

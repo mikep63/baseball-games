@@ -373,6 +373,39 @@ PIT_DECISIONS = """
     GROUP BY g.season, team, g.gametype"""
 
 
+# The two roles the game files record a man in besides playing. 2,709 people
+# in the database never played at all, and their pages had nothing on them:
+# every game names its two managers and its crew, so the record is there to be
+# counted, it was simply never asked for. Coaching is dates only -- no game
+# file records a coach -- which is why there is no third query here.
+MGR_RECORD = """
+    SELECT g.season, CASE WHEN g.mgr_home IS :pid THEN g.home ELSE g.vis END team,
+           g.gametype, COUNT(*) g,
+           SUM(CASE WHEN (g.mgr_home IS :pid AND g.home_score > g.vis_score)
+                      OR (g.mgr_vis  IS :pid AND g.vis_score  > g.home_score)
+                    THEN 1 ELSE 0 END) w,
+           SUM(CASE WHEN (g.mgr_home IS :pid AND g.home_score < g.vis_score)
+                      OR (g.mgr_vis  IS :pid AND g.vis_score  < g.home_score)
+                    THEN 1 ELSE 0 END) l,
+           SUM(CASE WHEN g.home_score = g.vis_score THEN 1 ELSE 0 END) t
+    FROM game g WHERE g.mgr_home IS :pid OR g.mgr_vis IS :pid
+    GROUP BY g.season, team, g.gametype ORDER BY g.season, team"""
+
+# One row per season per round, counting the games he worked at each base. A
+# man works one position in a game, so the positions sum to the games and
+# nothing is double-counted. Crews were two men before 1912, which is why the
+# early seasons show plate and first base and nothing else.
+UMP_RECORD = """
+    SELECT season, gametype, COUNT(*) g,
+           SUM(ump_hp IS :pid) hp, SUM(ump_1b IS :pid) b1,
+           SUM(ump_2b IS :pid) b2, SUM(ump_3b IS :pid) b3,
+           SUM(ump_lf IS :pid) lf, SUM(ump_rf IS :pid) rf
+    FROM game
+    WHERE ump_hp IS :pid OR ump_1b IS :pid OR ump_2b IS :pid
+       OR ump_3b IS :pid OR ump_lf IS :pid OR ump_rf IS :pid
+    GROUP BY season, gametype ORDER BY season"""
+
+
 def api_player(pid, conn):
     """Bio, plus season-by-season totals rebuilt from the box-score lines.
 
@@ -419,21 +452,28 @@ def api_player(pid, conn):
     for f in fielding:
         f["position"] = POSITIONS.get(f["pos"], str(f["pos"]))
 
-    tnames = team_map(conn, [(r["team"], r["season"]) for r in batting + pitching])
-    for r in batting + pitching:
+    managing = rows(conn.execute(MGR_RECORD, {"pid": pid}))
+    umpiring = rows(conn.execute(UMP_RECORD, {"pid": pid}))
+
+    tnames = team_map(conn, [(r["team"], r["season"])
+                             for r in batting + pitching + managing])
+    for r in batting + pitching + managing:
         r["teamName"] = tnames.get((r["team"], r["season"]), r["team"])
 
-    seasons = sorted({r["season"] for r in batting + pitching})
+    seasons = sorted({r["season"]
+                      for r in batting + pitching + managing + umpiring})
     return {"person": dict(p, name=name_of(p)),
             "batting": batting, "pitching": pitching, "fielding": fielding,
+            "managing": managing, "umpiring": umpiring,
             "seasons": seasons}
 
 
 def api_player_games(pid, q, conn):
     """Every game a man appeared in, one row each -- the thing Lahman can't do."""
+    season = intarg(q, "season")
     where, params = ["x.person = ?"], [pid]
-    if arg(q, "season"):
-        where.append("g.season = ?"); params.append(intarg(q, "season"))
+    if season:
+        where.append("g.season = ?"); params.append(season)
     sql = """
         SELECT g.id, g.date, g.season, g.gametype, g.vis, g.home,
                g.vis_score, g.home_score, g.park,
@@ -458,7 +498,53 @@ def api_player_games(pid, q, conn):
         g["oppName"] = tnames.get((g["opp"], g["season"]), g["opp"])
         g["ip"] = ("%d.%d" % (g["p_outs"] // 3, g["p_outs"] % 3)
                    if g["p_outs"] is not None else None)
-    return {"games": gs, "total": len(gs)}
+
+    # The same season from the bench and from behind the plate. These are kept
+    # apart from the playing log rather than folded into it: they carry no
+    # batting line, and a man who did both in one season -- a player-manager,
+    # of whom there are plenty before the war -- should see both records
+    # rather than one list that cannot say which is which.
+    managed = rows(conn.execute("""
+        SELECT g.id, g.date, g.season, g.gametype, g.vis, g.home,
+               g.vis_score, g.home_score, g.park,
+               CASE WHEN g.mgr_home IS :pid THEN g.home ELSE g.vis END team,
+               CASE WHEN g.mgr_home IS :pid THEN g.vis ELSE g.home END opp,
+               CASE WHEN g.mgr_home IS :pid THEN 1 ELSE 0 END side
+        FROM game g WHERE (g.mgr_home IS :pid OR g.mgr_vis IS :pid) %s
+        ORDER BY g.date, g.number""" % ("AND g.season = :season" if season else ""),
+        {"pid": pid, "season": season}))
+    for g in managed:
+        us = g["home_score"] if g["side"] else g["vis_score"]
+        them = g["vis_score"] if g["side"] else g["home_score"]
+        g["result"] = (None if us is None or them is None
+                       else "W" if us > them else "L" if us < them else "T")
+
+    umpired = rows(conn.execute("""
+        SELECT g.id, g.date, g.season, g.gametype, g.vis, g.home,
+               g.vis_score, g.home_score, g.park,
+               CASE WHEN g.ump_hp IS :pid THEN 'HP'
+                    WHEN g.ump_1b IS :pid THEN '1B'
+                    WHEN g.ump_2b IS :pid THEN '2B'
+                    WHEN g.ump_3b IS :pid THEN '3B'
+                    WHEN g.ump_lf IS :pid THEN 'LF' ELSE 'RF' END position
+        FROM game g
+        WHERE (g.ump_hp IS :pid OR g.ump_1b IS :pid OR g.ump_2b IS :pid
+               OR g.ump_3b IS :pid OR g.ump_lf IS :pid OR g.ump_rf IS :pid) %s
+        ORDER BY g.date, g.number""" % ("AND g.season = :season" if season else ""),
+        {"pid": pid, "season": season}))
+
+    others = managed + umpired
+    onames = team_map(conn, [(g["vis"], g["season"]) for g in others]
+                      + [(g["home"], g["season"]) for g in others])
+    for g in others:
+        g["visName"] = onames.get((g["vis"], g["season"]), g["vis"])
+        g["homeName"] = onames.get((g["home"], g["season"]), g["home"])
+    for g in managed:
+        g["teamName"] = onames.get((g["team"], g["season"]), g["team"])
+        g["oppName"] = onames.get((g["opp"], g["season"]), g["opp"])
+
+    return {"games": gs, "managed": managed, "umpired": umpired,
+            "total": len(gs) + len(managed) + len(umpired)}
 
 
 def api_team(code, q, conn):
