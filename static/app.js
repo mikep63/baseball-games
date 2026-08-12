@@ -959,6 +959,28 @@ function describePlay(ev) {
    only the docs/ build stores them compressed. */
 const playsCanBeRead = () => !window.LocalAPI || window.LocalAPI.canReadPlays;
 
+/* Retrosheet holds the place a change was made with an "NP" play and names the
+   man arriving in the `sub` record after it. One record does two jobs, and the
+   wording has to cover both: 14% of substitutions are men already in the game
+   moving across -- 5,090 of the 8,395 left fielders in a sample of 177,053 --
+   so "takes over" is used where "comes in" would be wrong that often. The
+   pitcher keeps "comes in": 236 of his 76,670 are moves.
+
+   Who left is not here, because the record does not say. Working it out would
+   mean replaying the lineup and every change before this one to see who held
+   the slot, which goes quietly wrong on double switches. */
+const SUB_ROLE = {
+  1: 'comes in to pitch', 2: 'takes over at catcher',
+  3: 'takes over at first base', 4: 'takes over at second base',
+  5: 'takes over at third base', 6: 'takes over at shortstop',
+  7: 'takes over in left field', 8: 'takes over in center field',
+  9: 'takes over in right field', 10: 'takes over as the designated hitter',
+  11: 'pinch-hits', 12: 'pinch-runs',
+};
+
+const subRole = s => SUB_ROLE[s.pos] || 'enters the game';
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+
 function playsHTML(plays, sides) {
   if (!plays.length) return '<p class="empty">No plays recorded.</p>';
   const out = [];
@@ -971,9 +993,27 @@ function playsHTML(plays, sides) {
         esc(sides[p.side])}</h5>`);
     }
     const d = describePlay(p.event);
-    out.push(`<div class="play">${playerLink(p.batter, p.batterName)}
-      <span class="${d.known ? 'pbp-text' : 'pbp-text note'}">${
-        d.known ? esc(d.text) : 'Not yet translated'}</span>
+    const subs = p.subs || [];
+    /* An NP row on its own reads "No play" beside the name of whoever was
+       batting before the change: a line that says nothing and points at the
+       wrong man. Where a substitution was made at it, that is what the row
+       says instead, and it leads with the man arriving rather than the man he
+       interrupted. Where a sub follows a real play -- 3 times in 177,053 -- it
+       is added to that play rather than replacing it. */
+    const lead = subs.length && /^NP/.test(p.event || '') ? subs[0] : null;
+    /* The club, but only when the half-inning above names the other one. A
+       pitching change is made while the other side bats, so "Comes in to
+       pitch" under "Top 8th — San Francisco" reads as a Giant when Galvez was
+       a Dodger. A pinch hitter needs no such help: the header is his side. */
+    const said = subs.map(s => cap(
+      (s === lead ? subRole(s) : `${s.name} ${subRole(s)}`)
+      + (s.side !== p.side ? ` for ${sides[s.side]}` : '')) + '.');
+    if (!lead && d.known) said.unshift(d.text);
+    const text = said.join(' ');
+    const who = lead || { person: p.batter, name: p.batterName };
+    out.push(`<div class="play">${playerLink(who.person, who.name)}
+      <span class="${text ? 'pbp-text' : 'pbp-text note'}">${
+        text ? esc(text) : 'Not yet translated'}</span>
       <code class="pbp-raw">${esc(d.raw)}</code></div>`);
   }
   return out.join('');
@@ -1507,12 +1547,13 @@ async function viewAbout() {
       scored.” The shorthand stays beside the English, because it is what
       Retrosheet actually wrote, and where the expansion has nothing to say it
       is all there is.</p>
-    <p class="note">Two things the plays don't carry here. Pitch sequences —
-      ball, called strike, foul, in play — are in the files from 1988 but are
-      not read in: they are two fifths of the bytes, and record the shape of a
-      plate appearance rather than its result. And a substitution is written as
-      a placeholder event, with the man coming in named in a record this build
-      doesn't load, so those rows read “No play”.</p>
+    <p class="note">What the plays don't carry here: pitch sequences — ball,
+      called strike, foul, in play — are in the files from 1988 but are not
+      read in, being two fifths of the bytes for the shape of a plate
+      appearance rather than its result. Substitutions are shown, but name only
+      the man arriving. Retrosheet's record is written that way, and deducing
+      the man he replaced would mean replaying the lineup, which goes quietly
+      wrong on double switches.</p>
 
     <h3>What the data can and can't say</h3>
     <p class="note">Game results go back to 1871, but the nineteenth-century game

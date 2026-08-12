@@ -639,13 +639,32 @@ def api_game_plays(gid, conn):
     characters of English -- and expanding it is a pure function of the string,
     so it happens where it is read rather than here. 18,263,689 of these are
     stored; not one expanded sentence is.
+
+    Each play carries the substitutions made at it, which is all an `NP` play
+    has to say for itself: the event is a placeholder and the batter named on
+    it is whoever was standing there before the change. The list is empty on
+    the other 90% of plays and is present on all of them, so a reader of this
+    endpoint never has to ask whether the field is missing or the list is.
+
+    A sub carries its own side because it is often not the side batting. A
+    pitching change happens while the other club is at the plate, so the
+    half-inning it sits in names the wrong team for it.
     """
     plays = rows(conn.execute(
         "SELECT seq, inning, side, batter, count, event FROM play "
         "WHERE game = ? ORDER BY seq", (gid,)))
-    names = people_map(conn, [p["batter"] for p in plays])
+    subs = rows(conn.execute(
+        "SELECT seq, person, side, pos FROM sub WHERE game = ? "
+        "ORDER BY seq, rowid", (gid,)))
+    names = people_map(conn, [p["batter"] for p in plays]
+                       + [s["person"] for s in subs])
+    at = {}
+    for s in subs:
+        s["name"] = names.get(s["person"], s["person"])
+        at.setdefault(s.pop("seq"), []).append(s)
     for p in plays:
         p["batterName"] = names.get(p["batter"], p["batter"])
+        p["subs"] = at.get(p["seq"], [])
     return {"game": gid, "plays": plays, "total": len(plays)}
 
 

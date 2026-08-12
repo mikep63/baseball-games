@@ -43,11 +43,11 @@ with no database and no server.
 
 | | |
 |---|---|
-| `docs/` | **committed**, ~630 MB — this is the deployed site |
-| `retro.sqlite`, `data/` | gitignored, ~2.6 GB and ~2.1 GB, both derived |
+| `docs/` | **committed**, ~639 MB — this is the deployed site |
+| `retro.sqlite`, `data/` | gitignored, ~2.7 GB and ~2.1 GB, both derived |
 | `release.json` | committed — the fingerprint each build diffs against |
 
-**GitHub Pages caps a published site at 1 GB.** `docs/` is at about 630 MB, and
+**GitHub Pages caps a published site at 1 GB.** `docs/` is at about 639 MB, and
 that headroom is why the play shards are gzipped rather than plain. Check the
 number before adding anything large.
 

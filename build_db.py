@@ -140,6 +140,19 @@ CREATE TABLE play(
   game TEXT, seq INT, inning INT, side INT, batter TEXT,
   count TEXT, event TEXT);
 
+-- The substitutions. Retrosheet holds the place a change happened with an `NP`
+-- play -- "no play" -- and names the man arriving in the `sub` record after it,
+-- so neither record is the fact on its own: the play has no event and the sub
+-- has no inning. `seq` is the play the sub follows, which is that NP in 177,050
+-- of 177,053 records sampled.
+--
+-- Who left is not stored, and not deducible from one record either. Naming him
+-- would mean replaying the starting lineup and every change before this one to
+-- see who held the slot, which goes quietly wrong on double switches and
+-- courtesy runners. The record says who arrived; this table says that and stops.
+CREATE TABLE sub(
+  game TEXT, seq INT, person TEXT, side INT, slot INT, pos INT);
+
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 """ % ",\n  ".join("%s_%s INT" % (s, c) for s in ("v", "h") for c in TEAM_STATS)
 
@@ -164,6 +177,7 @@ CREATE INDEX ix_ph_person    ON pinch_hit(person);
 CREATE INDEX ix_tbox_game    ON team_box(game);
 CREATE INDEX ix_bev_game     ON box_event(game);
 CREATE INDEX ix_play_game    ON play(game);
+CREATE INDEX ix_sub_game     ON sub(game);
 CREATE INDEX ix_roster_team  ON roster(team, season);
 CREATE INDEX ix_roster_person ON roster(person);
 """
@@ -651,8 +665,12 @@ def mark_coverage(conn, box_ids):
     read past: it records what happened to each pitch and never what was
     thrown, so it is 40% of the bytes for the shape of a plate appearance
     rather than its outcome.
+
+    The substitutions are read here too, keyed to the play they follow, because
+    that adjacency is the only thing tying them to a moment in the game and it
+    exists nowhere but in the file's own order.
     """
-    pbp, plays, gid, seq = set(), [], None, 0
+    pbp, plays, subs, gid, seq = set(), [], [], None, 0
     for pattern in ("events/*.EV[AN]", "events/*.ED[AN]",
                     "postseason/*.EVE", "allstar/*.EVE", "ngl_e/*.EVR"):
         for path in sorted(glob.glob(rel(pattern))):
@@ -671,11 +689,24 @@ def mark_coverage(conn, box_ids):
                         cnt = p[4] if p[4] not in ("??", "") else None
                         plays.append((gid, seq, num(p[1]), num(p[2]), p[3],
                                       cnt, p[6].strip()))
+                    elif line.startswith("sub,") and gid:
+                        s = line.rstrip("\n").split(",")
+                        if len(s) < 6:
+                            continue
+                        # Keyed to the play just read -- the NP holding its
+                        # place. The name in field 2 is dropped: person carries
+                        # it already, and 1.8 million second copies of it would
+                        # be 40 MB to say what a join says.
+                        subs.append((gid, seq, s[1], num(s[3]), num(s[4]),
+                                     num(s[5])))
             if len(plays) > 400000:
                 conn.executemany("INSERT INTO play VALUES(?,?,?,?,?,?,?)", plays)
-                plays = []
+                conn.executemany("INSERT INTO sub VALUES(?,?,?,?,?,?)", subs)
+                plays, subs = [], []
     if plays:
         conn.executemany("INSERT INTO play VALUES(?,?,?,?,?,?,?)", plays)
+    if subs:
+        conn.executemany("INSERT INTO sub VALUES(?,?,?,?,?,?)", subs)
     conn.executemany("UPDATE game SET has_box = 1 WHERE id = ?",
                      [(g,) for g in box_ids])
     conn.executemany("UPDATE game SET has_pbp = 1 WHERE id = ?", [(g,) for g in pbp])
@@ -683,6 +714,8 @@ def mark_coverage(conn, box_ids):
     say("with play-by-play", len(pbp))
     say("play", conn.execute("SELECT COUNT(*) FROM play").fetchone()[0],
         "Retrosheet's own shorthand; expanded at the point of reading")
+    say("sub", conn.execute("SELECT COUNT(*) FROM sub").fetchone()[0],
+        "who came in, keyed to the NP that holds the place")
     return pbp
 
 
@@ -727,7 +760,7 @@ def fingerprint(conn):
                             "AND home_lg IS NULL")},
         "rows": {t: one_("SELECT COUNT(*) FROM %s" % t)
                  for t in ("bat", "pit", "fld", "pinch_hit", "pinch_run",
-                           "box_event", "game_start", "roster")},
+                           "box_event", "game_start", "roster", "sub")},
     }
 
 

@@ -506,7 +506,7 @@ window.LocalAPI = (function () {
   }
 
   /* The play shards are stored gzipped, because GitHub Pages caps a published
-     site at 1 GB and 505 MB of plain JSON would not fit beside the rest. Pages
+     site at 1 GB and 889 MB of plain JSON would not fit beside the rest. Pages
      gzips in transit regardless, so this costs nothing on download -- but it
      does mean the browser has to inflate, and DecompressionStream is the one
      thing this frontend uses that an older browser may not have. */
@@ -534,6 +534,11 @@ window.LocalAPI = (function () {
       seq: i + 1, inning: p.inning, side: p.side, batter: p.batter,
       count: p.count, event: p.event,
       batterName: nameOf(pe.get(p.batter)) || p.batter,
+      // The shard stores a substitution as [id, position, side] on the play it
+      // was made at, and null where there was none; app.py names the man and
+      // always sends a list, so this does both.
+      subs: (p.sub || []).map(([person, pos, side]) => ({
+        person, side, pos, name: nameOf(pe.get(person)) || person })),
     }));
     return { game: gid, plays, total: plays.length };
   }

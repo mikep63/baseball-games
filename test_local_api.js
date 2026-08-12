@@ -149,16 +149,29 @@ async function main() {
 
   /* The play-by-play. app.py reads it from SQLite, api-local from a gzipped
      shard it inflates -- two entirely different paths to the same 57 plays. */
+  /* The substitutions travel differently in the two backings -- app.py joins a
+     table on the play's seq, api-local reads a column riding on the play row
+     -- so they are checked at the play they belong to. Larsen's is the 56th,
+     the pinch hitter who made the last out of the perfect game; the empty list
+     on the 1st play matters as much, because "no subs here" is a claim both
+     have to make the same way. */
   compare('/game/NYA195610080/plays',
     await API.get('/game/NYA195610080/plays'),
     fixture('game_NYA195610080_plays'),
     ['total', ...rowPaths('plays', 20, ['seq', 'inning', 'side', 'batter',
-                                        'batterName', 'count', 'event'])]);
+                                        'batterName', 'count', 'event']),
+     'plays.0.subs.length', 'plays.55.subs.length', 'plays.55.event',
+     'plays.55.subs.0.person', 'plays.55.subs.0.pos', 'plays.55.subs.0.name',
+     'plays.55.subs.0.side']);
   compare('/game/LAN198610050/plays',
     await API.get('/game/LAN198610050/plays'),
     fixture('game_LAN198610050_plays'),
     ['total', ...rowPaths('plays', 12, ['seq', 'inning', 'side', 'batter',
-                                        'event'])]);
+                                        'event']),
+     // Ten changes in this one, from Spilman at first to Valenzuela pitching.
+     'plays.3.subs.0.person', 'plays.3.subs.0.pos', 'plays.3.subs.0.name',
+     'plays.53.subs.0.person', 'plays.53.subs.0.pos', 'plays.53.subs.0.side',
+     'plays.86.subs.0.person', 'plays.86.subs.0.pos', 'plays.86.subs.0.side']);
 
   // --- a career: every season row and the fielding breakdown
   compare('/player/ruthb101', await API.get('/player/ruthb101'), fixture('player_ruthb101'),

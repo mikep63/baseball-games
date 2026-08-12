@@ -246,21 +246,31 @@ def export_plays(conn):
     to show one game's ninety plays, where a club's season is 220 KB.
 
     And it is written compressed because GitHub Pages caps a published site at
-    1 GB. Plain, these 18.3 million plays are 505 MB against a docs/ already
-    at 495; gzipped they are about 90. It buys nothing on download -- Pages
-    gzips in transit anyway -- and everything on fitting.
+    1 GB. Plain, these 18.3 million plays are 889 MB, more than the whole of
+    the rest of the site; gzipped they are 115. It buys nothing on download --
+    Pages gzips in transit anyway -- and everything on fitting.
+
+    The substitutions ride on the play they were made at, as [person, pos,
+    side], because that play is the only thing that places them in the game --
+    and because seq is not exported: the shard's row order is the sequence, so
+    a sub in a table of its own would have nothing to key against.
     """
     os.makedirs(PLAYS, exist_ok=True)
+    at = {}
+    for gid, seq, person, pos, side in conn.execute(
+            "SELECT game, seq, person, pos, side FROM sub "
+            "ORDER BY game, seq, rowid"):
+        at.setdefault((gid, seq), []).append([person, pos, side])
     shards, biggest, total = {}, 0, 0
     for gid, seq, inning, side, batter, count, event in conn.execute(
             "SELECT game, seq, inning, side, batter, count, event FROM play "
             "ORDER BY game, seq"):
         shards.setdefault(gid[:3] + gid[3:7], []).append(
-            [gid, inning, side, batter, count, event])
+            [gid, inning, side, batter, count, event, at.get((gid, seq))])
     for key, rows_ in shards.items():
         path = os.path.join(PLAYS, key + ".json.gz")
         blob = json.dumps({"c": ["game", "inning", "side", "batter", "count",
-                                 "event"], "r": rows_},
+                                 "event", "sub"], "r": rows_},
                           separators=(",", ":")).encode("utf-8")
         with gzip.open(path, "wb", compresslevel=9) as f:
             f.write(blob)

@@ -53,14 +53,15 @@ looking at 1927 downloads one 1.6 MB file, not the corpus. Careers are sharded
 on the player's initial for the same reason: one file is 18 MB and every player
 page would pay for it.
 
-`docs/` is about 630 MB and **is committed**, which is the cost of serverless
+`docs/` is about 639 MB and **is committed**, which is the cost of serverless
 hosting. Most shards are byte-identical between releases, so the yearly growth
 is the seasons that actually changed rather than another full copy.
 
 The play-by-play is the one thing written compressed. **GitHub Pages caps a
-published site at 1 GB**, and 18.3 million plays are 505 MB of plain JSON
-against a `docs/` already at 495; gzipped they are 105 MB across 2,982 shards,
-one per club per season, the largest 55 KB. It buys nothing on download —
+published site at 1 GB**, and 18.3 million plays are 889 MB of plain JSON —
+more than the whole of the rest of the site. Gzipped they are 115 MB across
+2,982 shards, one per club per season, the largest 60 KB. It buys nothing on
+download —
 Pages serves everything gzipped in transit anyway — and everything on fitting.
 The cost is that reading them needs `DecompressionStream`, so a browser older
 than Safari 16.4, Firefox 113 or Chrome 80 is told so and shown the rest of the
@@ -103,6 +104,15 @@ Worth knowing before trusting a number:
   expanded is ever stored — `describePlay` in `app.js` does it at the moment of
   reading. It handles 100% of a 232,535-play sample, and anything it does not
   recognise is shown as shorthand rather than as a confidently wrong sentence.
+- **A substitution names the man arriving and no one else.** Retrosheet holds
+  the place of a change with an `NP` play — "no play" — and names the man in
+  the `sub` record after it; 1,787,561 of them are loaded, keyed to the play
+  they follow, because the file's own order is the only thing placing them in
+  the game. Who left is not in the record. Deducing him would mean replaying
+  the lineup and every change before it to see who held the slot, which goes
+  quietly wrong on double switches, so the page does not claim it. 14% of subs
+  are men already in the game moving across, which is why a fielder "takes
+  over" rather than "comes in".
 - **Negro League games are not in the game logs at all.** Their headers here are
   synthesised from the box-score files, and Retrosheet notes most were deduced
   from newspaper accounts.

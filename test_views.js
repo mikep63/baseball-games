@@ -78,7 +78,7 @@ function loadApp() {
   const body = src.slice(0, cut);
   return new Function(body + '\nreturn {viewGames, viewGame, viewPlayer, viewTeam, ' +
     'viewTeams, viewDay, viewPark, viewSearch, viewAbout, ' +
-    'weekdayOf, monthsBetween, dayBucket, gamesHash, describePlay, ' +
+    'weekdayOf, monthsBetween, dayBucket, gamesHash, describePlay, playsHTML, ' +
     'setMeta: m => { META = m; }};')();
 }
 
@@ -317,6 +317,32 @@ async function main() {
      sentence: the fallback is the honest half of the parser. */
   const odd = V.describePlay('ZZ9/QQ');
   check('play — the unknown stays shorthand', !odd.known && odd.raw === 'ZZ9/QQ');
+
+  /* The last out of Larsen's perfect game was made by a pinch hitter. The row
+     holding his place is an NP, and it read "No play" beside Sal Maglie -- the
+     pitcher who had batted before him, and the one man on the page who did not
+     make that out. It is the whole case for reading the sub records. */
+  const larsen = JSON.parse(readFile(FIX + 'game_NYA195610080_plays.json'));
+  const pbp = V.playsHTML(larsen.plays, ['Brooklyn', 'New York']);
+  check('plays — the NP row names the man coming in, not the man before him',
+    pbp.includes('Dale Mitchell') && pbp.includes('Pinch-hits.')
+      && !pbp.includes('No play'),
+    pbp.includes('No play') ? 'an NP row still reads "No play"' : 'no Mitchell');
+  /* And the shorthand it came from stays on the row: NP is what Retrosheet
+     wrote there, and the sentence is this build's reading of it. */
+  check('plays — the substitution keeps its NP beside it',
+    /Dale Mitchell[\s\S]{0,400}>NP</.test(pbp));
+
+  /* A pitching change is made while the other club bats, so the half-inning
+     heading above it names the wrong side. Galvez was a Dodger and came in
+     during the top of the eighth, under a heading that says San Francisco. */
+  const lan = JSON.parse(readFile(FIX + 'game_LAN198610050_plays.json'));
+  const seventh = V.playsHTML(lan.plays, ['San Francisco', 'Los Angeles']);
+  check('plays — a fielding change names its own club, not the batting one',
+    seventh.includes('Comes in to pitch for Los Angeles.'));
+  // The pinch hitter's side is the side batting, so his row says no such thing.
+  check('plays — a pinch hitter is left to the heading',
+    seventh.includes('Pinch-hits.') && !seventh.includes('Pinch-hits for'));
 
   /* Calendar arithmetic, checked against Retrosheet rather than against
      itself: game.dow is recorded per game in the database, and these are the
