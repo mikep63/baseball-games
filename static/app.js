@@ -1562,7 +1562,10 @@ async function viewAbout() {
       leagues from the American League's first season in 1901. The play-by-play
       starts later: complete for the American and National Leagues from 1908,
       and before that only 33 scattered games back to 1900. The Federal League
-      of 1914–15 has box scores but no play-by-play.
+      of 1914–15 has no box scores at all — 1,243 games with the result and the
+      team's totals and no player lines — so a career that passed through it
+      skips those seasons: Benny Kauff led the league twice, and his page goes
+      1912, then 1916.
       Negro League games are not in the game logs at all; their records here are
       built from the box-score files, and Retrosheet notes that most were deduced
       from newspaper accounts.</p>

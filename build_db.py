@@ -761,6 +761,12 @@ def fingerprint(conn):
         "rows": {t: one_("SELECT COUNT(*) FROM %s" % t)
                  for t in ("bat", "pit", "fld", "pinch_hit", "pinch_run",
                            "box_event", "game_start", "roster", "sub")},
+        # The Federal League of 1914-15 has no box scores at all: 1,243 games
+        # carrying the game log's team totals and not one player line. The
+        # README and the About page both say so, and that is a claim which
+        # would quietly turn false the day a release filled them in.
+        "flBatLines": one_("SELECT COUNT(*) FROM bat b JOIN game g ON g.id = b.game "
+                           "WHERE g.vis_lg = 'FL' OR g.home_lg = 'FL'"),
     }
 
 

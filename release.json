@@ -2,6 +2,7 @@
   "firstBattingSeason": 1897,
   "firstBoxSeason": 1897,
   "firstPlaySeason": 1900,
+  "flBatLines": 0,
   "games": 240265,
   "gametypes": {
     "allstar": 141,

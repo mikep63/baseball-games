@@ -72,8 +72,9 @@ reaches the network, about once a year.
 ## Gotchas
 
 - Running `build_site.py` twice in quick succession can leave macOS duplicate
-  files. Clear them before committing:
-  `find docs/data/plays -name "* 2.json.gz" -delete`
+  files — in `careers/` as well as `plays/`, and numbered " 3" after a third
+  run, so a `* 2.json.gz` sweep misses most of them. Clear them before
+  committing: `find docs -regex '.* [0-9]+\.json\(\.gz\)?' -delete`
 - `SCHEMA` in `build_db.py` is `%`-formatted — a literal `%` in a SQL comment
   there will break the build.
 - JavaScriptCore has no `fetch`, `Response`, `TextDecoder` or

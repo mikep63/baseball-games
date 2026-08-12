@@ -89,9 +89,13 @@ Worth knowing before trusting a number:
   arrived with the summer 2026 release; 1896 is still the wall.
 - **Play-by-play is complete for the AL and NL from 1908**, which is earlier
   than Retrosheet's reputation suggests — 1908 and 1909 arrived complete with
-  the summer 2026 release. Four seasons are one game short. The
-  Federal League of 1914–15 has box scores but no play-by-play, which is the
-  whole of the apparent gap in those years.
+  the summer 2026 release. Four seasons are one game short. The Federal League
+  of 1914–15 is the whole of the apparent gap in those years.
+- **The Federal League of 1914–15 has no box scores at all.** Its 1,243 games
+  carry the game log's result and team totals and not one player line — no
+  batting, pitching or fielding rows, and no play-by-play either. A career
+  runs straight through it: Benny Kauff led the league in both its seasons,
+  and his page goes 1912, then 1916.
 - **Pitch sequences effectively start in 1988** (~88% of plays since; near zero
   before), and they are not kept here. They record what happened to each pitch
   — ball, called strike, foul, in play — and never what was thrown: Retrosheet
