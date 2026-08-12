@@ -1294,14 +1294,25 @@ async function viewPlayerGames(id, q) {
    empty IP and ER columns, and a two-way player -- Ruth in 1918, Ohtani now --
    gets both, each with the stats that belong to it, rather than one wide row
    half of which is blank. */
+/* The way out of a log row is the box pill, as it is in the games tab, and the
+   date beside it is data. A date that was a link read as though it would list
+   that day -- which is what a date does one tab over -- when it went to the one
+   game. The pill says what it opens and says whether there is a box score to
+   open, which the date could never do. The doubleheader number rides on it for
+   the same reason it does there: two rows of one date need telling apart. */
+const logGameLink = g => boxLinkHTML(g, g.number && g.number !== '0'
+  ? ' ' + g.number : '');
+const LOG_DATE = { t: 'Box', l: 1 };
+
 function renderGameLog(d, season) {
   const common = g => [
-    gameLink(g.id, niceDate(g.date)),
-    teamLink(g.team, g.season, g.teamName),
+    logGameLink(g),
+    niceDate(g.date),
+    esc(g.teamName || g.team),
     (g.side === 0 ? 'at ' : 'vs ') + esc(g.oppName),
     `${n(g.vis_score)}–${n(g.home_score)}`,
   ];
-  const HEAD = [{ t: 'Date', l: 1 }, { t: 'Team', l: 1 },
+  const HEAD = [LOG_DATE, { t: 'Date', l: 1 }, { t: 'Team', l: 1 },
                 { t: 'Opponent', l: 1 }, { t: 'Score' }];
 
   /* A season's games include October. Totalling the World Series into the
@@ -1333,29 +1344,31 @@ function renderGameLog(d, season) {
     if (play) parts.push((roles > 1 ? '<h5>Playing</h5>' : '') + play);
     if (b.mgr.length) {
       const rows = b.mgr.map(g => ({ cells: [
-        gameLink(g.id, niceDate(g.date)),
-        teamLink(g.team, g.season, g.teamName),
+        logGameLink(g),
+        niceDate(g.date),
+        esc(g.teamName || g.team),
         (g.side === 0 ? 'at ' : 'vs ') + esc(g.oppName),
         `${n(g.vis_score)}–${n(g.home_score)}`,
         g.result ? `<span class="result-${g.result}">${g.result}</span>` : '',
       ] }));
       const tally = k => b.mgr.filter(g => g.result === k).length;
-      rows.push({ _cls: 'totals', cells: [`${b.mgr.length} games`, '', '', '',
+      rows.push({ _cls: 'totals', cells: ['', `${b.mgr.length} games`, '', '', '',
         `${tally('W')}–${tally('L')}${tally('T') ? '–' + tally('T') : ''}`] });
       parts.push((roles > 1 ? '<h5>Managing</h5>' : '') + table(
-        [{ t: 'Date', l: 1 }, { t: 'Team', l: 1 }, { t: 'Opponent', l: 1 },
-         { t: 'Score' }, { t: 'Result' }], rows));
+        [LOG_DATE, { t: 'Date', l: 1 }, { t: 'Team', l: 1 },
+         { t: 'Opponent', l: 1 }, { t: 'Score' }, { t: 'Result' }], rows));
     }
     if (b.ump.length) {
       const rows = b.ump.map(g => ({ cells: [
-        gameLink(g.id, niceDate(g.date)),
+        logGameLink(g),
+        niceDate(g.date),
         `${esc(g.visName)} at ${esc(g.homeName)}`,
         `${n(g.vis_score)}–${n(g.home_score)}`,
         esc(g.position),
       ] }));
-      rows.push({ _cls: 'totals', cells: [`${b.ump.length} games`, '', '', ''] });
+      rows.push({ _cls: 'totals', cells: ['', `${b.ump.length} games`, '', '', ''] });
       parts.push((roles > 1 ? '<h5>Umpiring</h5>' : '') + table(
-        [{ t: 'Date', l: 1 }, { t: 'Game', l: 1 }, { t: 'Score' },
+        [LOG_DATE, { t: 'Date', l: 1 }, { t: 'Game', l: 1 }, { t: 'Score' },
          { t: 'Pos' }], rows));
     }
     if (!parts.length) continue;
@@ -1391,7 +1404,7 @@ function logTables(games, common, HEAD) {
       n(g.rbi), n(g.bb), n(g.so), n(g.sb)],
   }));
   if (batRows.length) {
-    batRows.push({ _cls: 'totals', cells: [`${batted.length} games`, '', '', '',
+    batRows.push({ _cls: 'totals', cells: ['', `${batted.length} games`, '', '', '',
       batTotal('ab'), batTotal('r'), batTotal('h'), batTotal('d'), batTotal('t'),
       batTotal('hr'), batTotal('rbi'), batTotal('bb'), batTotal('so'), batTotal('sb')] });
   }
@@ -1402,7 +1415,7 @@ function logTables(games, common, HEAD) {
       n(g.p_so), n(g.p_hr)],
   }));
   if (pitRows.length) {
-    pitRows.push({ _cls: 'totals', cells: [`${pitched.length} games`, '', '', '',
+    pitRows.push({ _cls: 'totals', cells: ['', `${pitched.length} games`, '', '', '',
       ip(pitTotal('p_outs')), pitTotal('p_h'), pitTotal('p_r'), pitTotal('p_er'),
       pitTotal('p_bb'), pitTotal('p_so'), pitTotal('p_hr')] });
   }

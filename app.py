@@ -544,7 +544,7 @@ def api_player_games(pid, q, conn):
         where.append("g.season = ?"); params.append(season)
     sql = """
         SELECT g.id, g.date, g.season, g.gametype, g.vis, g.home,
-               g.vis_score, g.home_score, g.park,
+               g.vis_score, g.home_score, g.park, g.has_box, g.number,
                b.ab, b.r, b.h, b.d, b.t, b.hr, b.rbi, b.bb, b.so, b.sb,
                b.hbp, b.sh, b.sf,
                p.outs p_outs, p.h p_h, p.r p_r, p.er p_er, p.bb p_bb,
@@ -574,7 +574,7 @@ def api_player_games(pid, q, conn):
     # rather than one list that cannot say which is which.
     managed = rows(conn.execute("""
         SELECT g.id, g.date, g.season, g.gametype, g.vis, g.home,
-               g.vis_score, g.home_score, g.park,
+               g.vis_score, g.home_score, g.park, g.has_box, g.number,
                CASE WHEN g.mgr_home IS :pid THEN g.home ELSE g.vis END team,
                CASE WHEN g.mgr_home IS :pid THEN g.vis ELSE g.home END opp,
                CASE WHEN g.mgr_home IS :pid THEN 1 ELSE 0 END side
@@ -589,7 +589,7 @@ def api_player_games(pid, q, conn):
 
     umpired = rows(conn.execute("""
         SELECT g.id, g.date, g.season, g.gametype, g.vis, g.home,
-               g.vis_score, g.home_score, g.park,
+               g.vis_score, g.home_score, g.park, g.has_box, g.number,
                CASE WHEN g.ump_hp IS :pid THEN 'HP'
                     WHEN g.ump_1b IS :pid THEN '1B'
                     WHEN g.ump_2b IS :pid THEN '2B'

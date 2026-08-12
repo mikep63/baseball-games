@@ -190,6 +190,16 @@ async function main() {
     ['player — Ruth, 1927 log', () => V.viewPlayer(['ruthb101', 'games'], Q({ season: 1927 })),
       h => h.includes('1927 game log') && h.includes('← Babe Ruth')
         && h.includes('href="#/player/ruthb101"')],
+    /* A log row goes to its game through the box pill, and the date and the
+       club beside it are plain cells. A linked date read as "show me that
+       day", which is what a date does in the games tab, and went to one game
+       instead. */
+    ['player — a log row leads with the box pill, not a linked date',
+      () => V.viewPlayer(['ruthb101', 'games'], Q({ season: 1927 })),
+      h => h.includes('class="pill" href="#/game/NYA192704120"')
+        && h.includes('<td class="l">April 12, 1927</td>')
+        && h.includes('<td class="l">New York Yankees</td>')
+        && !h.includes('>April 12, 1927</a>')],
     /* His 741 games used to be one bucket called "Negro Leagues", which was
        a league wearing a game type's clothes. Retrosheet says what each of
        them was: 509 regular-season games -- 679 hits, 136 home runs -- and

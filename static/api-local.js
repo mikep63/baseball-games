@@ -389,7 +389,7 @@ window.LocalAPI = (function () {
       out.push({
         id: g.id, date: g.date, season: yr, gametype: g.gametype,
         vis: g.vis, home: g.home, vis_score: g.vis_score, home_score: g.home_score,
-        park: g.park, side, team, opp,
+        park: g.park, side, team, opp, has_box: g.has_box, number: g.number,
         teamName: await teamName(team, yr), oppName: await teamName(opp, yr),
         ab: e.bat?.ab ?? null, r: e.bat?.r ?? null, h: e.bat?.h ?? null,
         d: e.bat?.d ?? null, t: e.bat?.t ?? null, hr: e.bat?.hr ?? null,
@@ -420,6 +420,7 @@ window.LocalAPI = (function () {
           id: g.id, date: g.date, season: yr, gametype: g.gametype,
           vis: g.vis, home: g.home, vis_score: g.vis_score,
           home_score: g.home_score, park: g.park, team, opp, side: home ? 1 : 0,
+          has_box: g.has_box, number: g.number,
           result: (us == null || them == null) ? null
             : us > them ? 'W' : us < them ? 'L' : 'T',
           teamName: await teamName(team, yr), oppName: await teamName(opp, yr),
@@ -432,6 +433,7 @@ window.LocalAPI = (function () {
           id: g.id, date: g.date, season: yr, gametype: g.gametype,
           vis: g.vis, home: g.home, vis_score: g.vis_score,
           home_score: g.home_score, park: g.park, position: at[1],
+          has_box: g.has_box, number: g.number,
           visName: await teamName(g.vis, yr), homeName: await teamName(g.home, yr),
         });
       }

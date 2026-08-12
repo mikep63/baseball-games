@@ -214,7 +214,8 @@ async function main() {
     fixture('player_lasot101_games_season_1977'),
     ['total', ...rowPaths('managed', 20, ['id', 'date', 'team', 'teamName',
                                           'opp', 'oppName', 'side', 'result',
-                                          'vis_score', 'home_score'])]);
+                                          'vis_score', 'home_score',
+                                          'has_box', 'number'])]);
   compare('/player/klemb901', await API.get('/player/klemb901'),
     fixture('player_klemb901'),
     ['person.name', 'person.ump_debut', 'person.ump_last',
@@ -224,15 +225,19 @@ async function main() {
     await API.get('/player/klemb901/games?season=1905'),
     fixture('player_klemb901_games_season_1905'),
     ['total', ...rowPaths('umpired', 20, ['id', 'date', 'position', 'visName',
-                                          'homeName', 'vis_score', 'home_score'])]);
+                                          'homeName', 'vis_score', 'home_score',
+                                          'has_box', 'number'])]);
 
   // --- a game log
+  // has_box and number are what the log's box pill is drawn from, so they have
+  // to survive the trip into the export as well as out of app.py.
   compare('/player/ruthb101/games?season=1927',
     await API.get('/player/ruthb101/games?season=1927'),
     fixture('player_ruthb101_games_season_1927'),
     ['total', ...rowPaths('games', 20, ['id', 'date', 'team', 'teamName', 'opp',
                                         'oppName', 'side', 'ab', 'r', 'h', 'hr',
-                                        'rbi', 'vis_score', 'home_score'])]);
+                                        'rbi', 'vis_score', 'home_score',
+                                        'has_box', 'number'])]);
 
   // --- a season: the running record is the thing most likely to drift
   compare('/team/NYA?season=1927', await API.get('/team/NYA?season=1927'),
