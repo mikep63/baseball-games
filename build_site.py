@@ -9,9 +9,10 @@ The exports are columnar -- one shared list of column names, then rows as
 plain arrays. Repeating the key name on all 5.6 million batting lines costs
 about 700 MB of JSON and buys nothing, since the reader knows the shape.
 
-Data is sharded by season because that is how the app is actually used: you
-look at 1927, not at all 155 seasons at once. A visitor downloads one file of
-roughly half a megabyte rather than the whole corpus. The three things that
+Data is sharded by what a reader asks for, not by what is convenient to write.
+A season is split in two: the game headers, which the calendar needs all of at
+once, and the box-score lines, which are wanted one club at a time and were
+87% of the file. The three things that
 genuinely span seasons -- name search, career totals and per-park history --
 are precomputed into their own files instead.
 
@@ -50,6 +51,7 @@ DATA = os.path.join(DOCS, "data")
 SEASONS = os.path.join(DATA, "season")
 CAREERS = os.path.join(DATA, "careers")
 PLAYS = os.path.join(DATA, "plays")
+BOX = os.path.join(DATA, "box")
 
 # Only what a view actually renders. The game page shows batting, pitching and
 # the itemised events; it does not show fielding lines, pinch-running or team
@@ -344,11 +346,24 @@ def export_reference(conn):
 
 
 def export_season(conn, season):
-    """One season: its games and the box-score lines belonging to them.
+    """One season, in two pieces: the games, and each club's box-score lines.
 
     Game ids are replaced by their index in the games list. The id is 13
     characters and repeats on every batting line; the index is one or two
     digits, and the reader can map back.
+
+    The lines are 87% of a season and they used to sit in this same file, so a
+    reader opening one box score in 2019 downloaded 5.9 MB to see it. They are
+    written per club-season instead -- the same unit `plays/` already uses --
+    which is about 160 KB, and a game page fetches the two clubs that played
+    it. The index keeps only what a whole season needs at once: the game
+    headers, for the calendar and the lists.
+
+    A row's `g` is still the season-wide game index, because a client holding
+    a box shard is always holding this index too. Which club a row belongs to
+    is its own `side` against that game's vis and home -- pinch_hit and
+    pinch_run carry a side of their own, and the batting extras take theirs
+    from the batting line they annotate.
     """
     games = conn.execute(
         "SELECT %s FROM game WHERE season = ? ORDER BY date, number, id"
@@ -379,35 +394,90 @@ def export_season(conn, season):
     # Sacrifices, hit batsmen, caught stealing and double plays grounded into
     # are zero for most batters in most games, so only the rows that have one
     # are exported. Absent means none, which is what the reader assumes.
+    # Carrying side on these three costs nothing in the file -- it is dropped
+    # again below -- and is what puts each row in the right club's shard.
     batx = [[idx[r[0]]] + list(r[1:]) for r in conn.execute(
-        "SELECT game, person, sh, sf, hbp, cs, gidp FROM bat WHERE game IN (%s) "
+        "SELECT game, person, sh, sf, hbp, cs, gidp, side FROM bat "
+        "WHERE game IN (%s) "
         "AND (sh > 0 OR sf > 0 OR hbp > 0 OR cs > 0 OR gidp > 0)" % q, ids)]
-    ph = [[idx[r[0]], r[1], r[2]] for r in conn.execute(
-        "SELECT game, person, inning FROM pinch_hit WHERE game IN (%s)" % q, ids)]
-    pr = [[idx[r[0]], r[1], r[2]] for r in conn.execute(
-        "SELECT game, person, inning FROM pinch_run WHERE game IN (%s)" % q, ids)]
-    bev = [[idx[r[0]]] + list(r[1:]) for r in conn.execute(
-        "SELECT game, kind, side, players, inning, runners_on, outs "
-        "FROM box_event WHERE game IN (%s) ORDER BY game, kind" % q, ids)]
+    ph = [[idx[r[0]], r[1], r[2], r[3]] for r in conn.execute(
+        "SELECT game, person, inning, side FROM pinch_hit WHERE game IN (%s)" % q, ids)]
+    pr = [[idx[r[0]], r[1], r[2], r[3]] for r in conn.execute(
+        "SELECT game, person, inning, side FROM pinch_run WHERE game IN (%s)" % q, ids)]
+    # Numbered as app.py returns them, because the two clubs' events are split
+    # into different files here and concatenating them back does not restore
+    # the order: Larsen's game has Reese and Hodges on the same kind in the
+    # same inning, one from each side, and only their original order tells
+    # them apart. `i` is that order, and the only thing the reader sorts on.
+    bev, seen = [], {}
+    for r in conn.execute(
+            "SELECT game, kind, side, players, inning, runners_on, outs "
+            "FROM box_event WHERE game IN (%s) ORDER BY game, kind, inning" % q, ids):
+        gi = idx[r[0]]
+        seen[gi] = seen.get(gi, -1) + 1
+        bev.append([gi] + list(r[1:]) + [seen[gi]])
     tbox = [[idx[r[0]]] + list(r[1:]) for r in conn.execute(
         "SELECT game, side, lob FROM team_box WHERE game IN (%s)" % q, ids)]
     roster = [list(r) for r in conn.execute(
         "SELECT team, person, pos, bats, throws FROM roster WHERE season = ? "
         "ORDER BY team, person", (season,))]
 
+    gcols = cols(GAME_COLS)
+    vis_i, home_i = gcols.index("vis"), gcols.index("home")
+    club = lambda gi, side: games[gi][home_i] if side else games[gi][vis_i]
+
+    # Each list, with the column that says whose row it is, and whether that
+    # column survives into the file. side is dropped from the three that only
+    # carry it to be sorted by; on bat, pit, bev and tbox it is real data.
+    lists = [
+        ("bat", bat, 2, False), ("pit", pit, 2, False),
+        ("batx", batx, 7, True), ("ph", ph, 3, True), ("pr", pr, 3, True),
+        ("bev", bev, 2, False), ("tbox", tbox, 1, False),
+    ]
+    by_club = {}
+    for name, rows_, side_at, drop in lists:
+        for r in rows_:
+            code = club(r[0], r[side_at])
+            if code is None:
+                continue        # a club Retrosheet gives no code for
+            by_club.setdefault(code, {}).setdefault(name, []).append(
+                r[:side_at] + r[side_at + 1:] if drop else r)
+    for r in roster:
+        by_club.setdefault(r[0], {}).setdefault("ros", []).append(r)
+
+    # Which clubs a man appeared for, so a game log can fetch his shards
+    # without reading the season. Two entries for the few who were traded.
+    played = {}
+    for name, rows_, side_at, _ in lists[:2]:
+        for r in rows_:
+            code = club(r[0], r[side_at])
+            if code:
+                played.setdefault(r[1], set()).add(code)
+
+    os.makedirs(BOX, exist_ok=True)
+    box_bytes = 0
+    for code, parts in by_club.items():
+        box_bytes += write(os.path.join(BOX, "%s%d.json" % (code, season)), {
+            "season": season, "team": code,
+            "batC": ["g"] + cols(BAT_COLS) + ["pos"], "bat": parts.get("bat", []),
+            "pitC": ["g"] + cols(PIT_COLS), "pit": parts.get("pit", []),
+            "batxC": ["g", "person", "sh", "sf", "hbp", "cs", "gidp"],
+            "batx": parts.get("batx", []),
+            "phC": ["g", "person", "inning"], "ph": parts.get("ph", []),
+            "prC": ["g", "person", "inning"], "pr": parts.get("pr", []),
+            "bevC": ["g", "kind", "side", "players", "inning", "on", "outs", "i"],
+            "bev": parts.get("bev", []),
+            "tboxC": ["g", "side", "lob"], "tbox": parts.get("tbox", []),
+            "rosC": ["team", "person", "pos", "bats", "throws"],
+            "ros": parts.get("ros", [])})
+
     path = os.path.join(SEASONS, "%d.json" % season)
     size = write(path, {
         "season": season,
         "gameC": cols(GAME_COLS), "games": [list(g) for g in games],
-        "batC": ["g"] + cols(BAT_COLS) + ["pos"], "bat": bat,
-        "pitC": ["g"] + cols(PIT_COLS), "pit": pit,
-        "batxC": ["g", "person", "sh", "sf", "hbp", "cs", "gidp"], "batx": batx,
-        "phC": ["g", "person", "inning"], "ph": ph,
-        "prC": ["g", "person", "inning"], "pr": pr,
-        "bevC": ["g", "kind", "side", "players", "inning", "on", "outs"], "bev": bev,
-        "tboxC": ["g", "side", "lob"], "tbox": tbox,
-        "rosC": ["team", "person", "pos", "bats", "throws"], "ros": roster})
-    return len(games), len(bat), size
+        "ptC": ["person", "teams"],
+        "pt": [[p, ",".join(sorted(t))] for p, t in sorted(played.items())]})
+    return len(games), len(bat), size + box_bytes, len(by_club), size
 
 
 def export_meta(conn, seasons):
@@ -530,14 +600,19 @@ def main():
     seasons = [r[0] for r in conn.execute(
         "SELECT DISTINCT season FROM game ORDER BY season")]
     biggest = (0, None)
-    done = 0
+    done = shards = 0
+    index_bytes = 0
     for s in seasons:
         out = export_season(conn, s)
         if out:
             done += 1
-            if out[2] > biggest[0]:
-                biggest = (out[2], s)
-    print("  %d shards, largest %d at %.1f KB" % (done, biggest[1], biggest[0] / 1024))
+            shards += out[3]
+            index_bytes += out[4]
+            if out[4] > biggest[0]:
+                biggest = (out[4], s)
+    print("  %d season indexes, largest %d at %.1f KB (%.0f MB in all)"
+          % (done, biggest[1], biggest[0] / 1024, index_bytes / 1048576))
+    print("  %d box shards, one per club per season" % shards)
 
     export_meta(conn, seasons)
     print("Frontend")

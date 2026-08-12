@@ -117,43 +117,71 @@ window.LocalAPI = (function () {
     return r ? ((r.city || '') + ' ' + (r.nickname || '')).trim() : code;
   }
 
-  /* One season's shard, turned into the object lists the endpoints want.
-     Game ids were replaced by their index on export; put them back. */
-  const shards = new Map();
+  /* One season's index: the games, and which clubs each man turned out for.
+     The box-score lines are not in here. They were 87% of a season shard, so
+     opening one box score in 2019 cost 5.9 MB; they are a file per club-season
+     now and this is what is left. Game ids were replaced by their index on
+     export; put them back. */
+  const indexes = new Map();
   async function shard(yr) {
-    if (!shards.has(yr)) {
-      shards.set(yr, (async () => {
+    if (!indexes.has(yr)) {
+      indexes.set(yr, (async () => {
         const s = await season(yr);
         const games = rows(s, 'gameC', 'games');
         games.forEach(g => { g.season = yr; });
-        const deref = (list, key) => list.forEach(x => { x.game = games[x[key]].id; });
-        const bat = rows(s, 'batC', 'bat'); deref(bat, 'g');
-        const pit = rows(s, 'pitC', 'pit'); deref(pit, 'g');
-        const ph = rows(s, 'phC', 'ph'); deref(ph, 'g');
-        const pr = rows(s, 'prC', 'pr'); deref(pr, 'g');
+        const teamsOf = new Map(rows(s, 'ptC', 'pt')
+          .map(x => [x.person, String(x.teams).split(',')]));
+        return { games, byId: new Map(games.map(g => [g.id, g])), teamsOf };
+      })());
+    }
+    return indexes.get(yr);
+  }
+
+  /* One club's season of box-score lines, about 160 KB. A row's `g` is still
+     an index into that season's games, because nothing reads one of these
+     without holding the index too. A club with no box scores at all -- every
+     Federal League side -- has no file, and an empty set is the honest answer
+     rather than an error. */
+  const boxes = new Map();
+  async function box(team, yr) {
+    const key = String(team) + yr;
+    if (!boxes.has(key)) {
+      boxes.set(key, (async () => {
+        const idx = await shard(yr);
+        const empty = { bat: [], pit: [], ph: [], pr: [], bev: [], tbox: [], ros: [] };
+        let s;
+        try { s = await load('box/' + key + '.json'); } catch (e) { return empty; }
+        const deref = list => { list.forEach(x => { x.game = idx.games[x.g].id; }); return list; };
+        const bat = deref(rows(s, 'batC', 'bat'));
         // sparse extras: absent means zero, not unknown
-        const batx = rows(s, 'batxC', 'batx'); deref(batx, 'g');
+        const batx = deref(rows(s, 'batxC', 'batx'));
         const xBy = new Map(batx.map(x => [x.game + '|' + x.person, x]));
         bat.forEach(b => {
           const x = xBy.get(b.game + '|' + b.person);
           for (const k of ['sh', 'sf', 'hbp', 'cs', 'gidp']) b[k] = x ? (x[k] || 0) : 0;
         });
-        const bev = rows(s, 'bevC', 'bev'); deref(bev, 'g');
-        const tbox = rows(s, 'tboxC', 'tbox'); deref(tbox, 'g');
-        const ros = rows(s, 'rosC', 'ros');
-        const byId = new Map(games.map(g => [g.id, g]));
-        const group = (list) => {
-          const m = new Map();
-          list.forEach(x => { if (!m.has(x.game)) m.set(x.game, []); m.get(x.game).push(x); });
-          return m;
-        };
-        return { games, byId, bat: group(bat), pit: group(pit),
-                 ph: group(ph), pr: group(pr), bev: group(bev),
-                 tbox: group(tbox), ros,
-                 allBat: bat, allPit: pit };
+        return { bat, pit: deref(rows(s, 'pitC', 'pit')),
+                 ph: deref(rows(s, 'phC', 'ph')), pr: deref(rows(s, 'prC', 'pr')),
+                 bev: deref(rows(s, 'bevC', 'bev')),
+                 tbox: deref(rows(s, 'tboxC', 'tbox')), ros: rows(s, 'rosC', 'ros') };
       })());
     }
-    return shards.get(yr);
+    return boxes.get(key);
+  }
+
+  /* Both clubs' lines for one game, in the order app.py returns them. The
+     visitors first is free -- side 0 is the visiting club, and its shard is
+     concatenated first -- but the itemised events are ordered by kind and
+     inning across the whole game, which concatenation does not give. */
+  async function gameBox(g) {
+    const [v, h] = await Promise.all([box(g.vis, g.season), box(g.home, g.season)]);
+    const mine = part => v[part].filter(x => x.game === g.id)
+      .concat(h[part].filter(x => x.game === g.id));
+    // `i` is the order app.py returns them in, numbered at export because
+    // the two clubs' events live in different files here.
+    const bev = mine('bev').sort((a, b) => a.i - b.i);
+    return { bat: mine('bat'), pit: mine('pit'), ph: mine('ph'),
+             pr: mine('pr'), bev, tbox: mine('tbox') };
   }
 
   async function decorate(games) {
@@ -297,20 +325,21 @@ window.LocalAPI = (function () {
     const pe = (await people()).by, pk = await parks();
     const M = await meta();
 
-    const phBy = new Map((s.ph.get(gid) || []).map(x => [x.person, x.inning]));
-    const prBy = new Map((s.pr.get(gid) || []).map(x => [x.person, x.inning]));
+    const bx = await gameBox(g);
+    const phBy = new Map(bx.ph.map(x => [x.person, x.inning]));
+    const prBy = new Map(bx.pr.map(x => [x.person, x.inning]));
 
     const last = id => (pe.get(id) || {}).last || null;
-    const batting = (s.bat.get(gid) || []).map(b => Object.assign({}, b, {
+    const batting = bx.bat.map(b => Object.assign({}, b, {
       name: nameOf(pe.get(b.person)), lastName: last(b.person),
       positions: b.pos ? String(b.pos).split('-').map(x => POSITIONS[x] || x) : [],
       pinchHitInning: phBy.get(b.person) ?? null,
       pinchRunInning: prBy.get(b.person) ?? null,
     }));
-    const pitching = (s.pit.get(gid) || []).map(p => Object.assign({}, p, {
+    const pitching = bx.pit.map(p => Object.assign({}, p, {
       name: nameOf(pe.get(p.person)), lastName: last(p.person),
     }));
-    const events = (s.bev.get(gid) || []).map(e => {
+    const events = bx.bev.map(e => {
       const parts = (e.players || '').split(',').filter(Boolean);
       return Object.assign({}, e, {
         // The export calls it `on` to keep the shards short; app.py calls it
@@ -337,7 +366,7 @@ window.LocalAPI = (function () {
       }),
       park: pk.by.get(g.park) || null,
       people: who, batting, pitching, fielding: [], running: [],
-      teamBox: Object.fromEntries((s.tbox.get(gid) || []).map(t => [t.side, t])),
+      teamBox: Object.fromEntries(bx.tbox.map(t => [t.side, t])),
       events,
     };
   }
@@ -376,10 +405,15 @@ window.LocalAPI = (function () {
     const yr = Number(q.get('season'));
     if (!yr) return { games: [], total: 0 };
     const s = await shard(yr);
+    /* His clubs that season, from the index, so a game log reads one or two
+       shards instead of every batting line the season has. */
+    const his = await Promise.all((s.teamsOf.get(pid) || []).map(t => box(t, yr)));
     const byGame = new Map();
-    for (const b of s.allBat) if (b.person === pid) byGame.set(b.game, { bat: b });
-    for (const p of s.allPit) if (p.person === pid) {
-      const e = byGame.get(p.game) || {}; e.pit = p; byGame.set(p.game, e);
+    for (const bx of his) {
+      for (const b of bx.bat) if (b.person === pid) byGame.set(b.game, { bat: b });
+      for (const p of bx.pit) if (p.person === pid) {
+        const e = byGame.get(p.game) || {}; e.pit = p; byGame.set(p.game, e);
+      }
     }
     const out = [];
     for (const [gid, e] of byGame) {
@@ -490,7 +524,7 @@ window.LocalAPI = (function () {
       }));
     }
     const pe = (await people()).by;
-    const roster = s.ros.filter(r => r.team === code).map(r => ({
+    const roster = (await box(code, yr)).ros.filter(r => r.team === code).map(r => ({
       person: r.person, pos: r.pos, bats: r.bats, throws: r.throws,
       name: nameOf(pe.get(r.person)) || r.person,
     })).sort((a, b) => {

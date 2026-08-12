@@ -51,12 +51,17 @@ python3 -m http.server -d docs 8001        # preview
 Then **Settings → Pages → Deploy from a branch → `main`, folder `/docs`**.
 
 The exports are columnar — one shared list of column names, then rows as bare
-arrays — and sharded by season, because that is how the app is used. A visitor
-looking at 1927 downloads one 1.6 MB file, not the corpus. Careers are sharded
-on the player's initial for the same reason: one file is 18 MB and every player
-page would pay for it.
+arrays — and sharded by what a reader actually asks for. Careers are sharded on
+the player's initial: one file is 18 MB and every player page would pay for it.
 
-`docs/` is about 639 MB and **is committed**, which is the cost of serverless
+A season is two pieces. `season/<year>.json` is the game headers alone, which
+is what the calendar and every list need at once — 763 KB at its largest. The
+box-score lines were 87% of that file and are `box/<CLUB><year>.json` instead,
+about 103 KB each, the same club-season unit `plays/` uses. Opening one 2019
+box score cost 6.1 MB when the two lived together; it costs 364 KB now, or
+1.1 MB counting the index the first time that season is touched.
+
+`docs/` is about 647 MB and **is committed**, which is the cost of serverless
 hosting. Most shards are byte-identical between releases, so the yearly growth
 is the seasons that actually changed rather than another full copy.
 

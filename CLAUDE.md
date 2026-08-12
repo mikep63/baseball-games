@@ -50,11 +50,11 @@ with no database and no server.
 
 | | |
 |---|---|
-| `docs/` | **committed**, ~639 MB — this is the deployed site |
+| `docs/` | **committed**, ~647 MB — this is the deployed site |
 | `retro.sqlite`, `data/` | gitignored, ~2.7 GB and ~2.1 GB, both derived |
 | `release.json` | committed — the fingerprint each build diffs against |
 
-**GitHub Pages caps a published site at 1 GB.** `docs/` is at about 639 MB, and
+**GitHub Pages caps a published site at 1 GB.** `docs/` is at about 647 MB, and
 that headroom is why the play shards are gzipped rather than plain. Check the
 number before adding anything large.
 
@@ -96,4 +96,9 @@ reaches the network, about once a year.
 - JavaScriptCore has no `fetch`, `Response`, `TextDecoder` or
   `DecompressionStream`. The test harnesses shim what they need, and
   `test_views.sh` inflates the gzipped shards the parity test reads.
-- The README says an iOS port counts as a front end. It does not exist yet.
+- The iOS port the README names, `baseball-games-ios`, was created on
+  2026-08-12 and is empty. The parity rule is live from the moment it holds
+  code: it should read the published JSON and `spec/plays_english.json` rather
+  than reimplement anything, and `notable.json` especially — those definitions
+  exist once, in `app.py`, and `build_site.py` calls it rather than restating
+  them.
