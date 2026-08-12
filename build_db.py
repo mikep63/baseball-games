@@ -17,6 +17,7 @@ Usage: python3 build_db.py
 """
 import csv
 import glob
+import json
 import os
 import re
 import sqlite3
@@ -380,8 +381,16 @@ GAME_COLS = ("id,date,number,dow,season,gametype,league,"
 def load_gamelogs(conn):
     rows, starts = [], []
     fixed = {f: 0 for f in TEAM_CODE_FIXES}
+    unknown = []
     for path in sorted(glob.glob(rel("gamelogs/gl*.txt"))):
         stem = os.path.basename(path)[:-4]
+        # A stem that is neither gl<year> nor a known special log falls through
+        # to "regular", which would file a postseason series into the regular
+        # season without a word. Retrosheet adds these -- the 1900
+        # Chronicle-Telegraph Cup arrived in the summer 2026 release -- so the
+        # fall-through is reported rather than trusted.
+        if stem not in SPECIAL_LOGS and not re.fullmatch(r"gl\d{4}", stem):
+            unknown.append(stem)
         gametype = SPECIAL_LOGS.get(stem, "regular")
         with open(path, newline="", encoding="latin-1") as f:
             for r in csv.reader(f):
@@ -424,7 +433,7 @@ def load_gamelogs(conn):
     conn.executemany("INSERT INTO game_start VALUES(?,?,?,?,?)", starts)
     say("game (from logs)", len(rows))
     say("starting lineup", len(starts))
-    return fixed
+    return fixed, unknown
 
 
 # -------------------------------------------------------------- box scores
@@ -621,6 +630,77 @@ def mark_coverage(conn, box_ids):
     return pbp
 
 
+RELEASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "release.json")
+
+
+def fingerprint(conn):
+    """The numbers a release is judged by, in one small committed file.
+
+    Retrosheet ships one archive a year or two and says in prose what changed.
+    This is the same claim in figures, taken from the build itself: what the
+    next build prints as moved is what actually moved, and `git diff
+    release.json` is the release's record in the history for good.
+    """
+    q = lambda sql: conn.execute(sql).fetchall()
+    one_ = lambda sql: conn.execute(sql).fetchone()[0]
+    return {
+        "seasons": {"first": one_("SELECT MIN(season) FROM game"),
+                    "last": one_("SELECT MAX(season) FROM game")},
+        "games": one_("SELECT COUNT(*) FROM game"),
+        "withBox": one_("SELECT COUNT(*) FROM game WHERE has_box = 1"),
+        "withPlays": one_("SELECT COUNT(*) FROM game WHERE has_pbp = 1"),
+        # The first season each kind of record appears at all -- not the same
+        # claim as the README's "complete from", but the number that moves when
+        # a release reaches further back, which is what a release note promises
+        # and this is here to check.
+        "firstBoxSeason": one_("SELECT MIN(season) FROM game WHERE has_box = 1"),
+        "firstPlaySeason": one_("SELECT MIN(season) FROM game WHERE has_pbp = 1"),
+        "firstBattingSeason": one_("SELECT MIN(g.season) FROM bat b "
+                                   "JOIN game g ON g.id = b.game"),
+        "gametypes": {k: v for k, v in q(
+            "SELECT gametype, COUNT(*) FROM game GROUP BY gametype ORDER BY 1")},
+        "people": one_("SELECT COUNT(*) FROM person"),
+        "rows": {t: one_("SELECT COUNT(*) FROM %s" % t)
+                 for t in ("bat", "pit", "fld", "pinch_hit", "pinch_run",
+                           "box_event", "game_start", "roster")},
+    }
+
+
+def report_release(conn):
+    """Print what moved since the committed fingerprint, then rewrite it."""
+    new = fingerprint(conn)
+    old = None
+    if os.path.exists(RELEASE_PATH):
+        with open(RELEASE_PATH) as f:
+            old = json.load(f)
+
+    def walk(a, b, path=""):
+        out = []
+        for k in sorted(set(a) | set(b)):
+            av, bv = a.get(k), b.get(k)
+            where = "%s.%s" % (path, k) if path else k
+            if isinstance(av, dict) or isinstance(bv, dict):
+                out += walk(av or {}, bv or {}, where)
+            elif av != bv:
+                delta = ("  (%+d)" % (bv - av)
+                         if isinstance(av, int) and isinstance(bv, int) else "")
+                out.append("  %-28s %s -> %s%s" % (where, av, bv, delta))
+        return out
+
+    if old is None:
+        print("\nNo release.json yet -- writing the first fingerprint.")
+    else:
+        moved = walk(old, new)
+        print("\nSince the last release:")
+        if moved:
+            print("\n".join(moved))
+        else:
+            print("  nothing moved.")
+    with open(RELEASE_PATH, "w") as f:
+        json.dump(new, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
 def check_team_fixes(conn, fixed, box_ids):
     """Report on TEAM_CODE_FIXES so it can't rot in silence."""
     problems = []
@@ -653,7 +733,7 @@ def main():
     load_rosters(conn)
 
     print("Games")
-    fixed = load_gamelogs(conn)
+    fixed, unknown_logs = load_gamelogs(conn)
     known = {r[0] for r in conn.execute("SELECT id FROM game")}
 
     print("Box scores")
@@ -663,6 +743,10 @@ def main():
     mark_coverage(conn, box_ids)
 
     problems = check_team_fixes(conn, fixed, box_ids)
+    for stem in unknown_logs:
+        problems.append("  gamelogs/%s.txt is not gl<year> and not in SPECIAL_LOGS, so "
+                        "its games were filed as regular season. If it is a round, add "
+                        "it to SPECIAL_LOGS." % stem)
     if not league_fixes:
         problems.append("  ALLSTAR_LEAGUE no longer changes anything -- Retrosheet has "
                         "fixed the All-Star squads' leagues upstream. Remove it.")
@@ -674,11 +758,14 @@ def main():
                      [("first_season", str(seasons[0])), ("last_season", str(seasons[1])),
                       ("games", str(seasons[2]))])
     conn.commit()
-    conn.execute("VACUUM")
-    conn.close()
 
     print("\n%s  %.0f MB" % (DB_PATH, os.path.getsize(DB_PATH) / 1e6))
     print("%s games, %s-%s" % ("{:,}".format(seasons[2]), seasons[0], seasons[1]))
+    # Read before the VACUUM, which is the last thing done to the file.
+    report_release(conn)
+    conn.execute("VACUUM")
+    conn.close()
+
     if problems:
         print("\nNeeds attention:")
         for p in problems:

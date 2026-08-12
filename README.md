@@ -165,16 +165,50 @@ and the box score did.
 ## Yearly update
 
 Retrosheet ships one archive that always points at the current release, so
-there is no URL to guess at:
+there is no URL to guess at, and roughly one release a year to apply. Push
+whatever is outstanding first: a release rewrites most of `docs/`, and mixed
+with a code change neither is reviewable.
 
 ```sh
-python3 update_data.py
+python3 update_data.py     # fetch, verify, rebuild
+python3 build_site.py      # re-export docs/
+./test_views.sh            # re-record fixtures, run both suites
 ```
 
-It refuses a download that has lost seasons or games relative to what's on
-disk, then rebuilds. Afterwards, re-read the "Needs attention" block that
-`build_db.py` prints — it is where a changed team code or a corrected upstream
-quirk will show up.
+**1. What the download refuses.** A truncated zip unpacks cleanly up to the
+byte it was cut off at, so "it opened" proves nothing. `update_data.py` counts
+seasons and game-log lines and will not replace what's on disk with fewer of
+either. Note that it counts *game logs*: Negro League games are not in them at
+all, and a release that adds only box scores or play-by-play will report "no
+new games" while changing the database a great deal. That is correct.
+
+**2. What `build_db.py` prints.** Two blocks matter.
+
+*Since the last release* is the diff against `release.json`, which is committed
+— the figures a release is judged by, taken from the build rather than from
+the release note's prose. `git diff release.json` is the record of what each
+release actually did, kept for good. Check it says what Retrosheet said it
+would: a season of Negro League games should move `gametypes.negro` and
+`games` by the same amount, new box scores for an early year should move
+`firstBoxSeason` and `firstBattingSeason`.
+
+*Needs attention* is where a silent misfiling shows up — a dead
+`TEAM_CODE_FIXES` entry, a box score with no game row, or a game-log file whose
+name is neither `gl<year>` nor a known round. That last one matters: game type
+comes from the filename, so an unrecognised one is filed as regular season
+without a word, which is how a postseason series ends up in a club's record.
+Add it to `SPECIAL_LOGS`.
+
+**3. What will fail, and should.** Several view tests assert career totals
+against the published record — Walter Johnson 417–279, Klem's 5,369 games,
+Josh Gibson's 633 hits. A release that revises games those men played in will
+move them. Read the `release.json` diff first: if it explains the change, the
+figures in `test_views.js` are what to update, and they are deliberately hard
+to update by accident.
+
+**4. What to re-read in this file.** The counts in the opening paragraph, and
+every era claim under *What the data can and can't say*. They are assertions
+about a particular release; `release.json` holds the current answers.
 
 ## Licence
 
