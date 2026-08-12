@@ -154,6 +154,21 @@ async function main() {
       V.viewGames([], Q({ season: 1927, gametype: 'worldseries' })),
       h => h.includes('4 games in 1927') && h.includes('table-wrap')
         && h.includes('Pittsburgh Pirates') && !h.includes('r-W')],
+    /* A league is not a kind of game. 1933 had two competitions running at
+       once, and the calendar used to blend them into the same day cells while
+       Type offered "Negro Leagues" beside "World Series" as alternatives. */
+    ['games (1933) — the league control appears', () =>
+      V.viewGames([], Q({ season: 1933 })),
+      h => h.includes('id="f-league"') && h.includes('Major Leagues')
+        && h.includes('Negro National League II')],
+    ['games (2024) — and stays away when there is one league', () =>
+      V.viewGames([], Q({ season: 2024 })),
+      h => !h.includes('id="f-league"')],
+    /* 170 games, narrow enough to list -- and the Major Leagues are not a
+       narrowing, being the season itself. */
+    ['games (1933) — a Negro League is a narrowing', () =>
+      V.viewGames([], Q({ season: 1933, league: 'NN2' })),
+      h => h.includes('id="f-league"') && h.includes('table-wrap')],
     ['game — Larsen perfect game', () => V.viewGame(['NYA195610080']),
       h => h.includes('Don Larsen') && h.includes('linescore') && h.includes('Yankee Stadium')],
     /* Maldonado hit two, in the 7th and the 9th. He is named once with the

@@ -27,6 +27,20 @@ import sys
 GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "postseason",
                   "worldseries", "allstar", "negro"]
 
+# app.py's LEAGUE_ORDER and LEAGUES. MLB leads where it exists; before 1901 the
+# senior circuit leads because MLB is simply not in that season's list.
+LEAGUE_ORDER = ["MLB", "NL", "AA", "PL", "UA", "NA", "FL",
+                "NN1", "NN2", "NAL", "ECL", "ANL", "EW", "NSL"]
+
+LEAGUES = {"MLB": "Major Leagues", "NL": "National League",
+           "AL": "American League", "AA": "American Association",
+           "PL": "Players' League", "UA": "Union Association",
+           "NA": "National Association", "FL": "Federal League",
+           "NN1": "Negro National League", "NN2": "Negro National League II",
+           "NAL": "Negro American League", "ECL": "Eastern Colored League",
+           "ANL": "American Negro League", "EW": "East-West League",
+           "NSL": "Negro Southern League"}
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "retro.sqlite")
 STATIC = os.path.join(BASE, "static")
@@ -47,6 +61,9 @@ GAME_COLS = ("id,date,number,gametype,vis,home,vis_score,home_score,park,"
              # app.py named all six, and put an umpire's own World Series
              # games outside his log.
              "ump_lf,ump_rf,"
+             # A league on each side, because a game between two leagues
+             # belongs to both and `league` cannot say so.
+             "vis_lg,home_lg,"
              "mgr_vis,mgr_home,wp,lp,sv,vis_sp,home_sp,v_h,v_e,h_h,h_e")
 # seq is dropped -- the export is written in lineup order, so the array index
 # carries it. slot is kept because it is not decoration: Retrosheet writes 0
@@ -326,6 +343,19 @@ def export_meta(conn, seasons):
         by_season.setdefault(season, []).append(gametype)
     for v in by_season.values():
         v.sort(key=lambda g: GAMETYPE_ORDER.index(g) if g in GAMETYPE_ORDER else 99)
+    # app.py's api_meta, for the same reason: 113 of the 155 seasons had one
+    # league and the control has nothing to offer there.
+    lg_season = {}
+    for season, vis_lg, home_lg in conn.execute(
+            "SELECT DISTINCT season, vis_lg, home_lg FROM game"):
+        for code in (vis_lg, home_lg):
+            g = ("MLB" if season >= 1901 and code in ("AL", "NL", "ML")
+                 else code)
+            if g:
+                lg_season.setdefault(season, set()).add(g)
+    by_league = {s: sorted(v, key=lambda l: LEAGUE_ORDER.index(l)
+                           if l in LEAGUE_ORDER else 99)
+                 for s, v in lg_season.items()}
     path = os.path.join(DATA, "meta.json")
     write(path, {"firstSeason": m[3], "lastSeason": m[4], "games": m[0],
                  "withBox": m[1], "withPlays": m[2], "seasons": seasons,
@@ -337,7 +367,8 @@ def export_meta(conn, seasons):
                                "wildcard": "Wild Card",
                                "postseason": "Postseason series",
                                "allstar": "All-Star Game",
-                               "negro": "Negro Leagues"}})
+                               "negro": "Negro Leagues"},
+                 "leagues": LEAGUES, "seasonLeagues": by_league})
     report("meta.json", path)
 
 

@@ -219,15 +219,24 @@ window.LocalAPI = (function () {
     return out;
   }
 
+  /* app.py's LEAGUE_CLAUSE. A game belongs to a league if either side does, so
+     one played across two leagues is under both rather than assigned to one. */
+  const sideLeague = (code, season) =>
+    (season >= 1901 && (code === 'AL' || code === 'NL' || code === 'ML'))
+      ? 'MLB' : code;
+  const inLeague = (g, lg) =>
+    sideLeague(g.vis_lg, g.season) === lg || sideLeague(g.home_lg, g.season) === lg;
+
   async function gamesList(q) {
     const yr = Number(q.get('season')) || (await meta()).lastSeason;
     const s = await shard(yr);
     const team = q.get('team'), type = q.get('gametype');
-    const date = q.get('date'), park = q.get('park');
+    const date = q.get('date'), park = q.get('park'), lg = q.get('league');
     const from = q.get('from'), to = q.get('to');
     let list = s.games.filter(g =>
       (!team || g.vis === team || g.home === team) &&
       (!type || g.gametype === type) &&
+      (!lg || inLeague(g, lg)) &&
       (!park || g.park === park) &&
       (!from || g.date >= from) && (!to || g.date <= to));
     const days = dayCounts(list, team);
@@ -245,7 +254,28 @@ window.LocalAPI = (function () {
     const yr = Number(q.get('season'));
     const t = await teams();
     if (!yr) return { franchises: [] };
-    const played = new Map(t.played.filter(p => p.season === yr).map(p => [p.team, p]));
+    const lg = q.get('league');
+    /* Unfiltered the counts are precomputed and no shard is touched. With a
+       league chosen they have to be counted over that league's games, because
+       a club belongs to the list if it played a game the filter admits -- the
+       St. Louis Giants met the Cardinals seven times and so are in the 1920
+       Major League list as well as their own. */
+    const played = lg
+      ? await (async () => {
+        const s = await shard(yr);
+        const m = new Map();
+        for (const g of s.games) {
+          if (!inLeague(g, lg)) continue;
+          for (const id of [g.vis, g.home]) {
+            const e = m.get(id) || { team: id, season: yr, games: 0, allstar: 1 };
+            e.games++;
+            if (g.gametype !== 'allstar') e.allstar = 0;
+            m.set(id, e);
+          }
+        }
+        return m;
+      })()
+      : new Map(t.played.filter(p => p.season === yr).map(p => [p.team, p]));
     const out = t.list.filter(x => x.season === yr && played.has(x.id))
       .map(x => ({ id: x.id, league: x.league, city: x.city, nickname: x.nickname,
                    n: played.get(x.id).games, allstar: played.get(x.id).allstar }))

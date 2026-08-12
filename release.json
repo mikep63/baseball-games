@@ -28,6 +28,11 @@
     "first": 1871,
     "last": 2025
   },
+  "sideLeagues": {
+    "acrossTwo": 10232,
+    "both": 239636,
+    "neither": 355
+  },
   "withBox": 221408,
   "withPlays": 207450
 }

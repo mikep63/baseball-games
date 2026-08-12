@@ -672,6 +672,15 @@ def fingerprint(conn):
         "gametypes": {k: v for k, v in q(
             "SELECT gametype, COUNT(*) FROM game GROUP BY gametype ORDER BY 1")},
         "people": one_("SELECT COUNT(*) FROM person"),
+        # The league filter rests on these being filled, and a release that
+        # changed a club's circuit would move them without touching a count.
+        "sideLeagues": {
+            "both": one_("SELECT COUNT(*) FROM game WHERE vis_lg IS NOT NULL "
+                         "AND home_lg IS NOT NULL"),
+            "acrossTwo": one_("SELECT COUNT(*) FROM game WHERE vis_lg IS NOT NULL "
+                              "AND home_lg IS NOT NULL AND vis_lg <> home_lg"),
+            "neither": one_("SELECT COUNT(*) FROM game WHERE vis_lg IS NULL "
+                            "AND home_lg IS NULL")},
         "rows": {t: one_("SELECT COUNT(*) FROM %s" % t)
                  for t in ("bat", "pit", "fld", "pinch_hit", "pinch_run",
                            "box_event", "game_start", "roster")},
@@ -711,6 +720,41 @@ def report_release(conn):
     with open(RELEASE_PATH, "w") as f:
         json.dump(new, f, indent=2, sort_keys=True)
         f.write("\n")
+
+
+# The team files and the game logs spell two leagues differently. Neither is
+# wrong; the game log's spelling wins because 235,607 games already carry it.
+LEAGUE_CODES = {"T": "NA", "F": "FL"}
+
+
+def fill_side_leagues(conn):
+    """Give every game a league on each side, not one league for the game.
+
+    A game between two leagues belongs to both -- the World Series, an
+    interleague game, the Cardinals against the St. Louis Giants in October
+    1920, a Negro American League club against a Negro National League one.
+    `league` cannot say that and is NULL for all of them; vis_lg and home_lg
+    can, and the game logs already fill them for every game they carry. What is
+    missing is the 4,658 headers synthesised from box scores, whose clubs know
+    their own league even though the game row does not.
+    """
+    conn.execute("""
+        UPDATE game SET
+          vis_lg = COALESCE(vis_lg, (SELECT t.league FROM team t
+                                     WHERE t.id = game.vis AND t.season = game.season)),
+          home_lg = COALESCE(home_lg, (SELECT t.league FROM team t
+                                       WHERE t.id = game.home AND t.season = game.season))
+        WHERE vis_lg IS NULL OR home_lg IS NULL""")
+    for old, new in LEAGUE_CODES.items():
+        conn.execute("UPDATE game SET vis_lg = ? WHERE vis_lg = ?", (new, old))
+        conn.execute("UPDATE game SET home_lg = ? WHERE home_lg = ?", (new, old))
+    r = conn.execute("SELECT COUNT(*) FROM game WHERE vis_lg IS NULL AND home_lg IS NULL").fetchone()
+    both = conn.execute("SELECT COUNT(*) FROM game WHERE vis_lg IS NOT NULL "
+                        "AND home_lg IS NOT NULL AND vis_lg <> home_lg").fetchone()
+    say("league on both sides", conn.execute(
+        "SELECT COUNT(*) FROM game WHERE vis_lg IS NOT NULL AND home_lg IS NOT NULL").fetchone()[0])
+    say("game across two leagues", both[0], "shown under each of them")
+    say("no league either side", r[0], "clubs Retrosheet gives no circuit")
 
 
 def check_team_fixes(conn, fixed, box_ids):
@@ -753,6 +797,7 @@ def main():
 
     print("Coverage")
     mark_coverage(conn, box_ids)
+    fill_side_leagues(conn)
 
     problems = check_team_fixes(conn, fixed, box_ids)
     for stem in unknown_logs:

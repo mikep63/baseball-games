@@ -34,6 +34,54 @@ POSITIONS = {1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF",
 GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "postseason",
                   "worldseries", "allstar", "negro"]
 
+# A league is not a kind of game, and the two were the same column for as long
+# as the Negro Leagues were a gametype: 1933 offered "Negro Leagues" beside
+# "World Series" as though a reader might be choosing between them, and the
+# calendar blended two competitions into one day.
+#
+# MLB is the American and the National together from 1901, which is what makes
+# it one entry rather than two; ML is what the game logs call an All-Star
+# squad. Before 1901 there is no MLB to pin at the top, so the senior circuit
+# leads by construction -- it is simply the first of that season's list.
+LEAGUE_GROUPS = {"AL": "MLB", "NL": "MLB", "ML": "MLB"}
+
+LEAGUE_ORDER = ["MLB", "NL", "AA", "PL", "UA", "NA", "FL",
+                "NN1", "NN2", "NAL", "ECL", "ANL", "EW", "NSL"]
+
+LEAGUES = {"MLB": "Major Leagues", "NL": "National League",
+           "AL": "American League", "AA": "American Association",
+           "PL": "Players' League", "UA": "Union Association",
+           "NA": "National Association", "FL": "Federal League",
+           "NN1": "Negro National League", "NN2": "Negro National League II",
+           "NAL": "Negro American League", "ECL": "Eastern Colored League",
+           "ANL": "American Negro League", "EW": "East-West League",
+           "NSL": "Negro Southern League"}
+
+
+def league_group(code, season):
+    """The entry a league code is filed under. MLB only exists from 1901."""
+    if code and season and season >= 1901:
+        return LEAGUE_GROUPS.get(code, code)
+    return code
+
+
+# A game belongs to a league if either side does, so a game across two leagues
+# is under both rather than assigned to one. That is 10,232 of them: every
+# World Series and interleague game, the Cardinals against the St. Louis Giants
+# in the Octobers of 1920 and 1921, and every Negro American League club that
+# met a Negro National League one.
+SIDE_LEAGUE = ("CASE WHEN g.season >= 1901 AND g.%s IN ('AL','NL','ML') "
+               "THEN 'MLB' ELSE g.%s END")
+
+LEAGUE_CLAUSE = "(%s = ? OR %s = ?)" % (SIDE_LEAGUE % ("vis_lg", "vis_lg"),
+                                        SIDE_LEAGUE % ("home_lg", "home_lg"))
+
+
+def league_params(code):
+    """Both sides are tested against the same code, so it binds twice."""
+    return [code, code]
+
+
 # "postseason" is a championship series a season had before there was a World
 # Series to call it -- the 1900 Chronicle-Telegraph Cup is the only one so far.
 GAMETYPES = {"regular": "Regular season", "worldseries": "World Series",
@@ -134,10 +182,24 @@ def api_meta(q, conn):
         by_season.setdefault(season, []).append(gametype)
     for v in by_season.values():
         v.sort(key=lambda g: GAMETYPE_ORDER.index(g) if g in GAMETYPE_ORDER else 99)
+    # And which leagues. 113 of the 155 seasons had one, and offering a filter
+    # there is offering nothing, so the frontend is told per season and shows
+    # the control only where there is a choice to make.
+    lg_season = {}
+    for season, vis_lg, home_lg in conn.execute(
+            "SELECT DISTINCT season, vis_lg, home_lg FROM game"):
+        for code in (vis_lg, home_lg):
+            g = league_group(code, season)
+            if g:
+                lg_season.setdefault(season, set()).add(g)
+    by_league = {s: sorted(v, key=lambda l: LEAGUE_ORDER.index(l)
+                           if l in LEAGUE_ORDER else 99)
+                 for s, v in lg_season.items()}
     return {"firstSeason": int(m["first_season"]), "lastSeason": int(m["last_season"]),
             "games": counts["games"], "withBox": counts["with_box"],
             "withPlays": counts["with_pbp"], "gametypes": GAMETYPES,
-            "seasonTypes": by_season}
+            "seasonTypes": by_season, "leagues": LEAGUES,
+            "seasonLeagues": by_league}
 
 
 def api_search(q, conn):
@@ -248,6 +310,8 @@ def api_games(q, conn):
         where.append("g.park = ?"); params.append(arg(q, "park"))
     if arg(q, "gametype"):
         where.append("g.gametype = ?"); params.append(arg(q, "gametype"))
+    if arg(q, "league"):
+        where.append(LEAGUE_CLAUSE); params += league_params(arg(q, "league"))
     # Everything above narrows the calendar too. `date` is the one filter that
     # must not, so it goes on last and the calendar is built from the clauses
     # standing before it.
@@ -644,15 +708,22 @@ def api_teams(q, conn):
         # against the Homestead Grays, and a rule of "played no regular-season
         # game" would demote the Grays themselves, since Negro League games
         # are typed 'negro' rather than 'regular'.
+        # A club is in the list if it played a game the filter admits, which is
+        # not the same as its own league matching: the St. Louis Giants of the
+        # Negro National League met the Cardinals seven times, so they belong
+        # to the National League's 1920 list as well as their own.
+        lg = arg(q, "league")
+        played = ("(g.vis = t.id OR g.home = t.id) AND g.season = t.season"
+                  + (" AND " + LEAGUE_CLAUSE if lg else ""))
+        p = league_params(lg) if lg else []
         return {"teams": rows(conn.execute("""
             SELECT t.id, t.league, t.city, t.nickname,
-                   (SELECT COUNT(*) FROM game g
-                    WHERE (g.vis = t.id OR g.home = t.id) AND g.season = t.season) n,
-                   (SELECT COUNT(*) FROM game g
-                    WHERE (g.vis = t.id OR g.home = t.id) AND g.season = t.season
+                   (SELECT COUNT(*) FROM game g WHERE %s) n,
+                   (SELECT COUNT(*) FROM game g WHERE %s
                       AND g.gametype <> 'allstar') = 0 AS allstar
             FROM team t WHERE t.season = ? AND n > 0
-            ORDER BY allstar, t.league, t.city""", (season,)))}
+            ORDER BY allstar, t.league, t.city""" % (played, played),
+            p + p + [season]))}
     return {"franchises": rows(conn.execute(
         "SELECT * FROM franchise ORDER BY first, id"))}
 

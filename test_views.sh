@@ -33,6 +33,14 @@ for u in \
   "games?season=1927&limit=400&park=NYC16" \
   "games?season=1985&limit=400&team=BAL&park=BLO01" \
   "teams?season=1985" \
+  "teams?season=1933" \
+  "teams?season=2024" \
+  "games?season=2024&limit=0" \
+  "teams?season=1933&league=NN2" \
+  "teams?season=1920&league=MLB" \
+  "games?season=1933&limit=0" \
+  "games?season=1933&limit=400&league=NN2" \
+  "games?season=1920&limit=400&league=NN1" \
   "teams?season=1871" \
   "games?season=1871&limit=400&date=1871-05-04" \
   "park/BLO01" \

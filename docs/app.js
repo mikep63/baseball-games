@@ -126,7 +126,7 @@ const ROUTES = {
    above the day's games, so the jump lands nowhere useful. Moving to another
    view, or changing a filter, still earns the scroll. */
 function placeOf(parts, q) {
-  return parts.join('/') + '|' + ['season', 'team', 'gametype', 'park', 'q']
+  return parts.join('/') + '|' + ['season', 'team', 'gametype', 'league', 'park', 'q']
     .map(k => q.get(k) || '').join('|');
 }
 let lastPlace = null;
@@ -346,11 +346,17 @@ function seasonGamesHTML(games, total, ctx) {
    against another season they answer a question nobody asked, and where the
    park stood idle that year they answer with an empty calendar and no
    control to explain it. So a change of season drops them. */
-function gamesHash({ season, team, gametype, park, date, was }) {
+function gamesHash({ season, team, gametype, league, park, date, was }) {
   const p = new URLSearchParams({ season });
   if (team) p.set('team', team);
   if (gametype) p.set('gametype', gametype);
+  /* The league is season-scoped like the day and the park: the Negro National
+     League is not a thing 1962 has, and carrying it across would leave the
+     reader on an empty calendar with a control reading a league that never
+     played that year. viewGames drops any league the season did not have, so
+     this only has to stop it being written. */
   const sameSeason = was === undefined || String(season) === String(was);
+  if (league && sameSeason) p.set('league', league);
   if (park && sameSeason) p.set('park', park);
   if (date && sameSeason) p.set('date', date);
   return '#/games?' + p;
@@ -378,7 +384,23 @@ async function viewGames(_, q) {
   const seasonTypes = (META.seasonTypes || {})[season] || Object.keys(META.gametypes);
   if (!seasonTypes.includes(gametype)) gametype = '';
 
-  const teams = (await api('/teams?season=' + season)).teams;
+  /* And only the leagues it actually had. 113 of the 155 seasons had one, so
+     the control is absent almost everywhere and appears for the 42 that need
+     it: 1882-91 when the American Association ran beside the National League,
+     1914-15 for the Federal League, and 1920-49 for the Negro Leagues. A
+     league is not a kind of game, which is why this is its own filter rather
+     than another entry in Type -- 1933 used to offer "Negro Leagues" beside
+     "World Series" as though those were alternatives, and put two
+     competitions in one calendar. */
+  const seasonLeagues = (META.seasonLeagues || {})[season] || [];
+  let league = q.get('league') || '';
+  if (!seasonLeagues.includes(league)) league = '';
+
+  /* The club list follows the league, so choosing one narrows the next control
+     rather than leaving 1933 offering every Negro League club to a reader
+     looking at the Major Leagues. */
+  const teams = (await api('/teams?season=' + season
+    + (league ? '&league=' + encodeURIComponent(league) : ''))).teams;
 
   /* Whether a list of games belongs under the calendar at all.
 
@@ -397,13 +419,21 @@ async function viewGames(_, q) {
 
      Regular season counts as no filter at all: in 123 of the 155 seasons it
      is all but a handful of the games, so choosing it narrows nothing. */
-  const narrow = !!team || !!park || (gametype !== '' && gametype !== 'regular');
+  /* A league is a narrowing like a club: the largest of the 42 seasons' minor
+     entries is a few hundred games, and picking the Negro National League in
+     1933 should give the 170 games it played rather than a calendar. The
+     Major Leagues are not -- they are the season, so that stays a calendar. */
+  const narrowLeague = !!league && league !== 'MLB'
+    && !(seasonLeagues.length && league === seasonLeagues[0] && season < 1901);
+  const narrow = !!team || !!park || narrowLeague
+    || (gametype !== '' && gametype !== 'regular');
   const wantList = !!date || narrow;
   /* 400 covers the widest of those with room to spare, and asking for none is
      what keeps the calendar-only view from putting rows on the wire that
      nothing is going to render. */
   const params = new URLSearchParams({ season, limit: wantList ? 400 : 0 });
   if (team) params.set('team', team);
+  if (league) params.set('league', league);
   if (gametype) params.set('gametype', gametype);
   if (date) params.set('date', date);
   if (park) params.set('park', park);
@@ -419,6 +449,10 @@ async function viewGames(_, q) {
     seasonTypes.map(k =>
       `<option value="${k}"${k === gametype ? ' selected' : ''}>${
         esc(META.gametypes[k] || k)}</option>`)).join('');
+  const leagueOpts = ['<option value="">Every league</option>'].concat(
+    seasonLeagues.map(k =>
+      `<option value="${k}"${k === league ? ' selected' : ''}>${
+        esc((META.leagues || {})[k] || k)}</option>`)).join('');
   const teamOpts = ['<option value="">Every club</option>'].concat(
     teams.map(t => `<option value="${t.id}"${t.id === team ? ' selected' : ''}>${
       esc((t.city || '') + ' ' + (t.nickname || ''))}</option>`)).join('');
@@ -450,11 +484,13 @@ async function viewGames(_, q) {
     <div class="controls">
       <label>Season<select id="f-season">${years.map(y =>
         `<option${y == season ? ' selected' : ''}>${y}</option>`).join('')}</select></label>
+      ${seasonLeagues.length > 1
+        ? `<label>League<select id="f-league">${leagueOpts}</select></label>` : ''}
       <label>Club<select id="f-team">${teamOpts}</select></label>
       ${seasonTypes.length > 1
         ? `<label>Type<select id="f-type">${typeOpts}</select></label>` : ''}
       ${park ? `<label>Park<span class="parkfilter">${esc(parkName)}<a
-        href="${gamesHash({ season, team, gametype, date: selected })}"
+        href="${gamesHash({ season, team, gametype, league, date: selected })}"
         title="Show every park" aria-label="Remove the park filter">×</a></span></label>` : ''}
     </div>
     <h2>${games.toLocaleString()} games in ${season}</h2>
@@ -465,17 +501,18 @@ async function viewGames(_, q) {
     ${calendarHTML(data.days, selected, !!team)}
     ${selected ? dayGamesHTML(selected, data.games)
       : (narrow && data.days.length)
-        ? seasonGamesHTML(data.games, data.total, { season, team, gametype, park })
+        ? seasonGamesHTML(data.games, data.total, { season, team, gametype, league, park })
         : ''}`;
 
   const go = () => {
     const t = document.getElementById('f-type');
+    const l = document.getElementById('f-league');
     location.hash = gamesHash({
       season: val('f-season'), team: val('f-team'), gametype: t ? t.value : '',
-      park, date: selected, was: season,
+      league: l ? l.value : '', park, date: selected, was: season,
     });
   };
-  ['f-season', 'f-team', 'f-type'].forEach(id => {
+  ['f-season', 'f-league', 'f-team', 'f-type'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', go);
   });
@@ -488,7 +525,7 @@ async function viewGames(_, q) {
       // Clicking the day already open puts it away again. The calendar is its
       // own deselect, so there is no third control to explain.
       location.hash = gamesHash({
-        season, team, gametype, park,
+        season, team, gametype, league, park,
         date: cell.dataset.date === selected ? '' : cell.dataset.date,
       });
     });

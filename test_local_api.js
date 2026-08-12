@@ -113,6 +113,28 @@ async function main() {
      ...rowPaths('events', 3, ['kind', 'side', 'inning', 'runners_on',
                                'playerNames.0'])]);
 
+  /* The league filter matches either side, so a game across two leagues is
+     under both. Nothing else enforces that the two backends agree on it. */
+  compare('/games?season=1933&league=NN2',
+    await API.get('/games?season=1933&limit=400&league=NN2'),
+    fixture('games_season_1933_limit_400_league_NN2'),
+    ['total', ...rowPaths('games', 12, ['id', 'date', 'vis', 'home', 'visName',
+                                        'homeName', 'gametype'])]);
+  compare('/games?season=1920&league=NN1',
+    await API.get('/games?season=1920&limit=400&league=NN1'),
+    fixture('games_season_1920_limit_400_league_NN1'),
+    ['total', ...rowPaths('games', 3, ['id', 'date', 'vis', 'home'])]);
+  /* The St. Louis Giants met the Cardinals seven times in 1920-21, so they are
+     in the Major Leagues' club list as well as their own. */
+  compare('/teams?season=1920&league=MLB',
+    await API.get('/teams?season=1920&league=MLB'),
+    fixture('teams_season_1920_league_MLB'),
+    rowPaths('teams', 17, ['id', 'league', 'city', 'nickname', 'n']));
+  compare('/teams?season=1933&league=NN2',
+    await API.get('/teams?season=1933&league=NN2'),
+    fixture('teams_season_1933_league_NN2'),
+    rowPaths('teams', 8, ['id', 'league', 'city', 'nickname', 'n']));
+
   // --- a career: every season row and the fielding breakdown
   compare('/player/ruthb101', await API.get('/player/ruthb101'), fixture('player_ruthb101'),
     ['person.name', 'person.hof', 'person.bats', 'person.throws', 'person.height',

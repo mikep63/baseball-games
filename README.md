@@ -28,7 +28,7 @@ respectively, both entirely derived, both one command away.
 
 | | |
 |---|---|
-| **Games** | every game, filterable by season, club, park, date and type |
+| **Games** | every game, filterable by season, league, club, park, date and type |
 | **Game** | line score, both box scores, itemised HR/SB/CS/DP/HBP, umpires, weather, attendance |
 | **Player** | bio, season-by-season batting/pitching/fielding/managing/umpiring — one table per kind of game — and every game he took part in |
 | **Team** | a club's season: schedule, running record, roster |
@@ -98,6 +98,23 @@ Worth knowing before trusting a number:
   season, club and round, which is what makes them agree with the published
   record — lumping the rounds together gives Rivera 44 saves in 1997 rather than
   43, the extra one being the All-Star Game.
+- **A league is a property of each side, not of the game.** `league` cannot
+  describe a game played between two of them and is NULL for all 10,232 —
+  every World Series and interleague game, the Cardinals against the St. Louis
+  Giants of the Negro National League in the Octobers of 1920 and 1921, and
+  every Negro American League club that met a Negro National League one. The
+  filter reads `vis_lg` and `home_lg` and matches either, so such a game
+  appears under both leagues rather than being assigned to one. 239,636 games
+  carry a league on both sides; the 355 that carry neither are clubs Retrosheet
+  gives no circuit for.
+- **The Negro Leagues are still a game *type* as well as a league**, which is
+  one place too many. `negro` covers 4,654 games that are really the regular
+  seasons of seven distinct circuits, the East-West All-Star Game, the Negro
+  World Series — 420 games between the NAL and the NN2, 1937–48 — and
+  barnstorming exhibitions against major-league squads. Separating them is a
+  research question, not a mechanical one, and until it is answered the league
+  filter carries the distinction the calendar needed and the type column
+  repeats it.
 - **Managers and umpires are on every game; coaches are on none.** 2,709 people
   in the database never played, and their record is counted the same way a
   pitcher's decisions are — from the game rather than from a box score. The
