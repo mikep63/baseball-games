@@ -81,6 +81,7 @@ because JavaScriptCore has no `DecompressionStream` either.
 | `build_site.py` | export `docs/` for Pages |
 | `static/` | the frontend: `index.html`, `app.js`, `style.css`, `api-local.js` |
 | `test_views.sh` | re-record fixtures, render every view, check both backends agree |
+| `spec/plays_english.json` | the shorthand and the English it must read as — the one thing a second front end reimplements rather than reads |
 
 ## What the data can and can't say
 

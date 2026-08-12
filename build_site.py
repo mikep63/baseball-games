@@ -491,6 +491,14 @@ def copy_frontend():
         html = html.replace(ref, '"%s?v=%s"' % (name, stamp))
     open(os.path.join(DOCS, "index.html"), "w", encoding="utf-8").write(html)
     open(os.path.join(DOCS, ".nojekyll"), "w").close()
+
+    # The play-by-play spec ships with the site so another front end can fetch
+    # the contract rather than vendor a stale copy of it. It is the one part of
+    # this app that a port has to reimplement instead of read.
+    spec_src = os.path.join(BASE, "spec", "plays_english.json")
+    if os.path.exists(spec_src):
+        os.makedirs(os.path.join(DOCS, "spec"), exist_ok=True)
+        shutil.copy(spec_src, os.path.join(DOCS, "spec", "plays_english.json"))
     print("  frontend copied, index.html rewritten for a subdirectory")
     print("  cache stamps %s" % ", ".join(
         "%s=%s" % (n, s) for n, s in sorted(stamps.items())))

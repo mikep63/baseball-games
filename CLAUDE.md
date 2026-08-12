@@ -17,6 +17,13 @@ translation belongs in `api-local.js`, not in the view.
 A change to a query in `app.py` is half a change. The other half is the export,
 and `test_views.sh` is what says so.
 
+One thing is not settled by either: the play-by-play is stored in shorthand and
+expanded at the moment of reading, so the English lives only in `describePlay`.
+`spec/plays_english.json` is the contract for it — event in, sentence out, in no
+particular language, so a second front end can be held to the same sentences.
+`test_views.js` runs it. **Change a sentence and you are changing the spec**:
+edit that file, not the expectations, because there are none anywhere else.
+
 ## Before you call anything done
 
 ```sh
@@ -71,10 +78,19 @@ reaches the network, about once a year.
 
 ## Gotchas
 
-- Running `build_site.py` twice in quick succession can leave macOS duplicate
-  files — in `careers/` as well as `plays/`, and numbered " 3" after a third
-  run, so a `* 2.json.gz` sweep misses most of them. Clear them before
-  committing: `find docs -regex '.* [0-9]+\.json\(\.gz\)?' -delete`
+- **Something in this checkout keeps making numbered copies under `docs/`** —
+  `app 2.js`, `1927 2.json`, `NYA1956 3.json.gz`. 4,178 appeared after one
+  commit and 2,288 more after the next: byte-identical to their originals,
+  carrying the originals' timestamps, and back again after being deleted. It is
+  not `build_site.py` run twice, whatever this file used to say — they arrive
+  with no build in between. The repo sits under `~/Documents` with iCloud Drive
+  active, which is the usual cause, and moving it out is the real fix. They are
+  never tracked, so sweep by shape rather than by extension before committing,
+  and check afterwards that `git status` shows no tracked file deleted:
+
+  ```sh
+  find docs -regex '.* [0-9]+\(\..*\)?$' -delete
+  ```
 - `SCHEMA` in `build_db.py` is `%`-formatted — a literal `%` in a SQL comment
   there will break the build.
 - JavaScriptCore has no `fetch`, `Response`, `TextDecoder` or

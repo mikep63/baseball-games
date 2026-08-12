@@ -321,62 +321,24 @@ async function main() {
     location.hash === '#/player/ruthb101/games?season=1927', location.hash);
 
   /* Retrosheet's event notation, against plays from Larsen's perfect game and
-     the ordinary run of things. Expanding it is a pure function of the string,
-     so it is checked here directly rather than through a view. */
-  [['K/C', 'Strikeout looking.'],
-   ['K', 'Strikeout.'],
-   ['53/G5', 'Ground ball out, third baseman to first baseman.'],
-   ['9/L89', 'Line drive out to right-center.'],
-   ['HR/F9LD', 'Home run down the right-field line.'],
-   ['W', 'Walk.'],
-   ['IW', 'Intentional walk.'],
-   ['HP', 'Hit by pitch.'],
-   ['S8/L.2-H;1-3', 'Single to center field. Runner on second scored. Runner on first to third.'],
-   ['S67/G6+', 'Single to shortstop.'],
-   ['D7/L7L.2-H', 'Double down the left-field line. Runner on second scored.'],
-   ['E6/G6', 'Reached on an error by the shortstop.'],
-   ['64(1)3/GDP', 'Double play, shortstop to second baseman to first baseman.'],
-   ['SB2', 'Stole second.'],
-   ['CS3(25)', 'Caught stealing third.'],
-   ['NP', 'No play.'],
-   ['WP.2-3', 'Wild pitch. Runner on second to third.'],
-  ].forEach(([ev, want]) => {
-    const got = V.describePlay(ev);
-    check('play — ' + ev, got.known && got.text === want,
+     the ordinary run of things. The expectations are deliberately not written
+     here: they are in spec/plays_english.json, because expanding a play is the
+     one substantial thing a second front end has to reimplement rather than
+     read out of the export, and a JavaScript array literal is not a contract a
+     Swift port can be held to. This file runs the spec; the spec is the spec. */
+  const spec = JSON.parse(readFile('spec/plays_english.json'));
+  for (const c of spec.expanded) {
+    const got = V.describePlay(c.event);
+    check('play — ' + c.event, got.known && got.text === c.text,
       got.known ? got.text : 'unparsed');
-  });
-  /* The hit locations, which live inside the trajectory modifier and are
-     documented by Retrosheet only in a diagram. The grammar was read off the
-     data, so these check each part of it: the zone, the two-man gaps, the
-     depth, the line, foul ground, and the one ball with its own name. */
-  [['HR/F78XD', 'Home run to extra deep left-center.'],
-   ['S8/L8S', 'Single to shallow center field.'],
-   ['S6/G6M', 'Single up the middle.'],
-   ['S7/G56', 'Single between third and short.'],
-   ['D9/F89D', 'Double to deep right-center.'],
-   ['8/F8D', 'Fly ball out to deep center field.'],
-   ['9/F9LF', 'Fly ball out down the right-field line in foul ground.'],
-   ['3/L3F', 'Line drive out into foul ground by first base.'],
-   /* Depth is dropped on a bare infield position -- "deep shortstop" is not a
-      place -- and a ground ball keeps its chain of fielders either way. */
-   ['5/G5S', 'Ground ball out to the third baseman.'],
-   ['63/G6M', 'Ground ball out, shortstop to first baseman.'],
-   // An unlocated modifier still reads: most games before 1989 have none.
-   ['S8/L', 'Single to center field.'],
-  ].forEach(([ev, want]) => {
-    const got = V.describePlay(ev);
-    check('location — ' + ev, got.known && got.text === want,
-      got.known ? got.text : 'unparsed');
-  });
-  /* A code the grammar does not cover must leave the sentence alone rather
-     than drop a wrong place into it. */
-  check('location — an unknown zone is left unsaid',
-    V.describePlay('S/L99XX').text === 'Single.', V.describePlay('S/L99XX').text);
-
-  /* An event it has never seen must read as shorthand, not as a wrong
-     sentence: the fallback is the honest half of the parser. */
-  const odd = V.describePlay('ZZ9/QQ');
-  check('play — the unknown stays shorthand', !odd.known && odd.raw === 'ZZ9/QQ');
+  }
+  /* And what it must refuse to translate. A gap has to read as shorthand on
+     the page rather than as a confidently wrong sentence. */
+  for (const c of spec.shorthand) {
+    const got = V.describePlay(c.event);
+    check('play — ' + c.event + ' stays shorthand',
+      !got.known && got.raw === c.event, got.text || 'claimed to know it');
+  }
 
   /* The last out of Larsen's perfect game was made by a pinch hitter. The row
      holding his place is an NP, and it read "No play" beside Sal Maglie -- the
