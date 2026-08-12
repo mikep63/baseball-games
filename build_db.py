@@ -36,7 +36,12 @@ DB_PATH = os.path.join(BASE, "retro.sqlite")
 # Self-healing: check_team_fixes reports an entry that no longer changes
 # anything, so a release that normalises this upstream leaves a dead line here
 # that says so rather than silently rotting.
-TEAM_CODE_FIXES = [("OAK", "KC1", 1955, 1967)]
+# Empty since the summer 2026 release, which is the release that fixed it: the
+# Kansas City Athletics were OAK in the game logs and KC1 everywhere else from
+# 1955 to 1967, and uncorrected it cost 1,029 games their box scores. All 2,060
+# are KC1 upstream now. The mechanism stays for the next one, and
+# check_team_fixes reports an entry as dead rather than letting it rot.
+TEAM_CODE_FIXES = []
 
 # Game-log files that aren't a regular season
 SPECIAL_LOGS = {"glas": "allstar", "glws": "worldseries", "gllc": "lcs",
@@ -438,9 +443,16 @@ def load_gamelogs(conn):
 
 # -------------------------------------------------------------- box scores
 
-BOX_SOURCES = [("boxes/*.EB[AN]", None),      # AL/NL regular season, 1898-
-                ("ebe/*.EBE", None),          # All-Star and post-season
-                ("ngl_b/*.EBR", "negro")]     # Negro Leagues
+BOX_SOURCES = [("boxes/*.EB[AN]", None),          # AL/NL regular season, 1897-
+                ("ebe/*.EBE", "postseason"),      # All-Star and post-season
+                ("ngl_b/*.EBR", "negro")]         # Negro Leagues
+
+# The kind above is only used for a game the game logs never listed. Every
+# World Series and All-Star game is in a log of its own and keeps the type that
+# log gives it; what falls through is a series the logs don't carry, and the
+# only ones are postseason. Left as None these arrived as regular season -- the
+# 1900 Chronicle-Telegraph Cup, four games in the summer 2026 release, filed
+# into Pittsburgh's and Brooklyn's regular seasons without a word.
 
 
 def load_boxes(conn, known):

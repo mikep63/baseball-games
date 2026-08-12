@@ -1,7 +1,7 @@
 # Baseball Games
 
 A zero-dependency local web app over the [Retrosheet](https://www.retrosheet.org)
-game and box-score files: **239,442 games, 1871–2025**, of which 219,778 have a
+game and box-score files: **240,265 games, 1871–2025**, of which 221,408 have a
 full box score. Python standard library only — no pip installs.
 
 It is the sibling of `baseball-records`, which does the same job over the
@@ -72,11 +72,13 @@ is the seasons that actually changed rather than another full copy.
 
 Worth knowing before trusting a number:
 
-- **Results go back to 1871, batting lines only to 1898.** The game logs for
-  1873–1897 carry the score and nothing else — no team batting totals, let
-  alone per-player ones. 24 seasons, ~19,000 games.
-- **Play-by-play is complete for the AL and NL from 1910**, which is earlier
-  than Retrosheet's reputation suggests. Three seasons are one game short. The
+- **Results go back to 1871, batting lines only to 1897.** The game logs for
+  1871–1896 carry the score and nothing else — no team batting totals, let
+  alone per-player ones. 26 seasons, 17,601 games. The 1897 National League
+  arrived with the summer 2026 release; 1896 is still the wall.
+- **Play-by-play is complete for the AL and NL from 1908**, which is earlier
+  than Retrosheet's reputation suggests — 1908 and 1909 arrived complete with
+  the summer 2026 release. Four seasons are one game short. The
   Federal League of 1914–15 has box scores but no play-by-play, which is the
   whole of the apparent gap in those years.
 - **Pitch sequences effectively start in 1988** (~88% of plays since; near zero
@@ -84,11 +86,12 @@ Worth knowing before trusting a number:
 - **Negro League games are not in the game logs at all.** Their headers here are
   synthesised from the box-score files, and Retrosheet notes most were deduced
   from newspaper accounts.
-- **Earned runs effectively start in 1909.** 1907 records them for 12 of its
-  3,229 pitching lines and 1908 for 15, and 1909 for 60%. A season that has
-  none sums to NULL and shows no ERA at all; 1909 sums what it has, so an ERA
-  for that season is a partial numerator over a whole denominator and reads far
-  too low. Everything from 1910 is complete.
+- **Earned runs effectively start in 1908.** 1906 records them for 17 of its
+  3,090 pitching lines and 1907 for about half. A season that has none sums to
+  NULL and shows no ERA at all; 1907 sums what it has, so an ERA for that
+  season is a partial numerator over a whole denominator and reads far too low.
+  Everything from 1908 is complete — it was 1910 before the summer 2026
+  release, which is what those event files bought.
 - **Wins, losses, saves, starts, complete games and shutouts are derived, not
   read.** No box score carries them: the decision is a column on the game, and a
   complete game is the fact that his side used nobody else. They are counted per
@@ -119,13 +122,21 @@ Two things in the source actively mislead if taken at face value, and
   into one table inflates every pinch-hit appearance in the database. They live
   in `bat` and `pinch_hit` respectively, and only `bat` is ever summed.
 
-And one place the files disagree with each other:
+And one place the files used to disagree with each other:
 
-- **The Kansas City Athletics are `OAK` in the game logs and `KC1` everywhere
-  else**, 1955–1967. Every other club in every other era agrees. Uncorrected it
-  costs 1,029 games their box scores. `TEAM_CODE_FIXES` handles it and
-  `check_team_fixes` reports the entry as dead if a future release fixes it
-  upstream.
+- **The Kansas City Athletics were `OAK` in the game logs and `KC1` everywhere
+  else**, 1955–1967, which uncorrected cost 1,029 games their box scores.
+  Retrosheet fixed it in the summer 2026 release — all 2,060 are `KC1` now — and
+  `check_team_fixes` is what said so, reporting the entry as dead the first time
+  the new data was built. `TEAM_CODE_FIXES` is empty and stays, for the next one.
+
+- **A game type comes from the name of the file the game arrived in**, and a
+  name nobody has taught the build about is filed as regular season. The 1900
+  Chronicle-Telegraph Cup came with the summer 2026 release as four games in
+  `ebe/`, a folder whose games had until then always been in a game log too;
+  synthesised headers from it defaulted to regular, which put a championship
+  series into Brooklyn's and Pittsburgh's regular seasons. They are `postseason`
+  now — a round a season had before there was a World Series to call it.
 
 ## Tests
 

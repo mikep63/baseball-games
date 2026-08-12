@@ -760,8 +760,8 @@ async function viewGame(parts) {
 
 /* The order a season's rounds are played in -- app.py's GAMETYPE_ORDER, so a
    career reads down the calendar. */
-const TYPE_ORDER = ['regular', 'wildcard', 'division', 'lcs', 'worldseries',
-                    'allstar', 'negro'];
+const TYPE_ORDER = ['regular', 'wildcard', 'division', 'lcs', 'postseason',
+                    'worldseries', 'allstar', 'negro'];
 const typeRank = t => (TYPE_ORDER.indexOf(t) + 1) || 99;
 
 /* Column orders follow baseball-records, so the two front ends put the same

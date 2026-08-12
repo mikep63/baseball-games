@@ -24,8 +24,8 @@ import shutil
 import sqlite3
 import sys
 
-GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "worldseries",
-                  "allstar", "negro"]
+GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "postseason",
+                  "worldseries", "allstar", "negro"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, "retro.sqlite")
@@ -335,6 +335,7 @@ def export_meta(conn, seasons):
                                "lcs": "League Championship Series",
                                "division": "Division Series",
                                "wildcard": "Wild Card",
+                               "postseason": "Postseason series",
                                "allstar": "All-Star Game",
                                "negro": "Negro Leagues"}})
     report("meta.json", path)

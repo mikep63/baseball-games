@@ -174,11 +174,13 @@ async function main() {
     ['player — Ruth, 1927 log', () => V.viewPlayer(['ruthb101', 'games'], Q({ season: 1927 })),
       h => h.includes('1927 game log') && h.includes('← Babe Ruth')
         && h.includes('href="#/player/ruthb101"')],
-    /* Every one of his 495 games is gametype 'negro', so a page that showed
-       the regular season alone showed him nothing at all. */
+    /* Every one of his 741 games is gametype 'negro', so a page that showed
+       the regular season alone showed him nothing at all. 971 hits and 188
+       home runs: it was 633 and 116 until the summer 2026 release put the
+       1933 and 1934 seasons back in the middle of his prime. */
     ['player — Josh Gibson, Negro Leagues only', () => V.viewPlayer(['gibsj101'], Q({})),
       h => h.includes('Josh Gibson') && h.includes('Negro Leagues')
-        && h.includes('>633<') && h.includes('>116<')],
+        && h.includes('>971<') && h.includes('>188<')],
     /* A pitcher's line is read for W-L-ERA before anything else, and none of
        the six are in Retrosheet's box score -- 1913 is 36-7, 36 GS, 29 CG,
        11 SHO. */

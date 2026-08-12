@@ -1,32 +1,33 @@
 {
-  "firstBattingSeason": 1898,
-  "firstBoxSeason": 1898,
-  "firstPlaySeason": 1903,
-  "games": 239442,
+  "firstBattingSeason": 1897,
+  "firstBoxSeason": 1897,
+  "firstPlaySeason": 1900,
+  "games": 240265,
   "gametypes": {
     "allstar": 95,
     "division": 513,
     "lcs": 585,
-    "negro": 3835,
+    "negro": 4654,
+    "postseason": 4,
     "regular": 233634,
     "wildcard": 73,
     "worldseries": 707
   },
-  "people": 26961,
+  "people": 27049,
   "rows": {
-    "bat": 5652309,
-    "box_event": 1234621,
-    "fld": 5203284,
+    "bat": 5684605,
+    "box_event": 1254431,
+    "fld": 5235189,
     "game_start": 3919011,
-    "pinch_hit": 470415,
-    "pinch_run": 85231,
-    "pit": 1223308,
-    "roster": 138020
+    "pinch_hit": 471322,
+    "pinch_run": 85409,
+    "pit": 1227889,
+    "roster": 138160
   },
   "seasons": {
     "first": 1871,
     "last": 2025
   },
-  "withBox": 219778,
-  "withPlays": 204643
+  "withBox": 221408,
+  "withPlays": 207450
 }

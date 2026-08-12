@@ -31,13 +31,15 @@ POSITIONS = {1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF",
 
 # The order a season's rounds are played in, so the filter reads down the
 # calendar rather than in whatever order the rows came back.
-GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "worldseries",
-                  "allstar", "negro"]
+GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "postseason",
+                  "worldseries", "allstar", "negro"]
 
+# "postseason" is a championship series a season had before there was a World
+# Series to call it -- the 1900 Chronicle-Telegraph Cup is the only one so far.
 GAMETYPES = {"regular": "Regular season", "worldseries": "World Series",
              "lcs": "League Championship Series", "division": "Division Series",
-             "wildcard": "Wild Card", "allstar": "All-Star Game",
-             "negro": "Negro Leagues"}
+             "wildcard": "Wild Card", "postseason": "Postseason series",
+             "allstar": "All-Star Game", "negro": "Negro Leagues"}
 
 
 def db():
