@@ -114,6 +114,7 @@ const ROUTES = {
   player: viewPlayer,
   team: viewTeam,
   teams: viewTeams,
+  notable: viewNotable,
   day: viewDay,
   park: viewPark,
   search: viewSearch,
@@ -126,8 +127,8 @@ const ROUTES = {
    above the day's games, so the jump lands nowhere useful. Moving to another
    view, or changing a filter, still earns the scroll. */
 function placeOf(parts, q) {
-  return parts.join('/') + '|' + ['season', 'team', 'gametype', 'league', 'park', 'q']
-    .map(k => q.get(k) || '').join('|');
+  return parts.join('/') + '|' + ['season', 'team', 'gametype', 'league', 'park',
+    'q', 'kind'].map(k => q.get(k) || '').join('|');
 }
 let lastPlace = null;
 
@@ -1495,6 +1496,70 @@ async function viewTeams(_, q) {
     <h2>Clubs in ${season}</h2>${blocks}`;
   document.getElementById('t-season').addEventListener('change', e => {
     location.hash = '#/teams?season=' + e.target.value;
+  });
+}
+
+// -------------------------------------------------------------- notable games
+
+/* The way in for a reader who does not already have a date in mind. The Games
+   tab answers "what happened that day" and a player page answers "what did he
+   do"; this answers "show me something worth reading".
+
+   Every row is derived here, not copied from a list. Retrosheet publishes its
+   own -- nohit_chrono.htm, perfect.htm, cycles.htm -- but as web pages, and
+   the two were reconciled row by row on 2026-08-12 rather than trusted: their
+   pages carry games our box scores contradict, ours carry games their pages
+   have never listed, and the note under each table says so rather than
+   claiming to be the record. */
+const NOTABLE_SOURCE = {
+  plays: ['', ''],
+  box: ['box score', 'No play-by-play for this game, so the box score is the '
+        + 'whole of the evidence: it cannot see a man who reached on an error.'],
+  log: ['game log only', 'No box score for this game at all — the game log has '
+        + 'the result and the team totals, and nobody is named.'],
+};
+
+async function viewNotable(_, q) {
+  const d = await api('/notable');
+  const asked = q.get('kind');
+  const kind = d.kinds.some(k => k.id === asked) ? asked : d.kinds[0].id;
+  const meta = d.kinds.find(k => k.id === kind);
+
+  const rows = d.rows[kind].map(r => {
+    // A pill only where the row rests on less than the rest of its table: on
+    // the box score alone in a list the play-by-play otherwise settles, or on
+    // a game log with no box score behind it at all.
+    const weak = r.source === 'log' || (kind === 'perfect' && r.source === 'box');
+    const [label, why] = NOTABLE_SOURCE[r.source] || ['', ''];
+    return { cells: [
+      gameLink(r.game, niceDate(r.date)),
+      r.who.length ? r.who.map(w => playerLink(w.id, w.name)).join(', ')
+        : '<span class="note">not recorded</span>',
+      teamLink(r.team, r.season, r.teamName)
+        + (weak ? ` <span class="pill quiet" title="${esc(why)}">${esc(label)}</span>` : ''),
+      teamLink(r.opp, r.season, r.oppName),
+      esc(r.score),
+    ] };
+  });
+
+  app.innerHTML = `
+    <h2>Games worth reading</h2>
+    <div class="filters"><label>Kind <select id="n-kind">${d.kinds.map(k =>
+      `<option value="${k.id}"${k.id === kind ? ' selected' : ''}>${esc(k.label)} (${
+        k.n.toLocaleString()})</option>`).join('')}</select></label></div>
+    <p class="note">${esc(meta.note)}</p>
+    <p class="note">Derived from the box scores here, not taken from a list —
+      so it reaches games no official list carries, and stops where the data
+      does. Box scores start in 1897: Bobby Lowe's four home runs in 1894 and
+      the two perfect games of 1880 cannot appear. The Federal League of
+      1914–15 has no box scores at all, and the Negro Leagues are in.</p>
+    ${table([{ t: 'Date', l: 1 }, { t: meta.id === 'nohit' || meta.id === 'perfect'
+        ? 'Pitcher' : 'Batter', l: 1 }, { t: 'Club', l: 1 },
+      { t: 'Against', l: 1 }, { t: 'Score' }], rows,
+      { empty: 'Nothing of this kind in the data.' })}`;
+
+  document.getElementById('n-kind').addEventListener('change', e => {
+    location.hash = '#/notable?kind=' + e.target.value;
   });
 }
 

@@ -766,11 +766,193 @@ def api_teams(q, conn):
         "SELECT * FROM franchise ORDER BY first, id"))}
 
 
+# ------------------------------------------------------------ notable games
+
+# Reconciled against Retrosheet's own lists on 2026-08-12 -- nohit_chrono.htm,
+# perfect.htm, cycles.htm. They publish those as web pages only, so nothing
+# here reads them; these are the same claims taken from the data instead, and
+# the divergences are known rather than guessed at. What the reconciliation
+# settled is in the comments on each query below.
+NOTABLE_KINDS = [
+    ("nohit", "No-hitters", "A side held without a hit over a full game."),
+    ("perfect", "Perfect games", "Twenty-seven up, twenty-seven down: no hit,"
+     " no walk, no man reaching by any route."),
+    ("cycle", "Cycles", "A single, a double, a triple and a home run, in one"
+     " game by one man."),
+    ("fourhr", "Four home runs", "Four in a single game."),
+]
+
+
+def batted_nine(line):
+    """Did this side bat nine innings? The line score is what knows.
+
+    Retrosheet writes one figure per inning and an "x" for the half a winning
+    home team never played, so "0,0,0,0,0,0,0,4,x" is eight innings batted and
+    not nine, however many outs the game as a whole ran to.
+    """
+    parts = [p for p in (line or "").split(",") if p != ""]
+    return len(parts) >= 9 and not any(p.strip().lower() == "x" for p in parts)
+
+
+def _no_hit_sides(conn):
+    """(game, side) -> where the claim came from, for every side held hitless.
+
+    Two routes, because neither is complete on its own. The pitching lines
+    miss the Federal League of 1914-15, which has no box scores at all -- five
+    of Retrosheet's no-hitters are in those two seasons. The game log's team
+    totals miss every Negro League game, whose headers are synthesised and
+    carry NULL for hits, and that is 17 more. The union is 316; either alone
+    is short.
+    """
+    found = {}
+    for gid, side in conn.execute(
+            "SELECT game, side FROM pit GROUP BY game, side "
+            "HAVING SUM(h) = 0 AND SUM(outs) >= 27"):
+        found[(gid, side)] = "box"
+
+    # The game log is only asked where there are no pitching lines to ask, and
+    # the innings come from the line score rather than from the game's total
+    # outs. A road pitcher who loses an eight-inning no-hitter is in a game of
+    # 51 outs like any other -- Andy Hawkins in 1990, Matt Young in 1992,
+    # Weaver in 2008, Greene in 2022 -- and the majors ruled in 1991 that none
+    # of those is a no-hitter. What says so here is the "x" the line score
+    # carries where a side never came to bat.
+    for gid, v_h, h_h, vis_line, home_line in conn.execute(
+            "SELECT id, v_h, h_h, vis_line, home_line FROM game "
+            "WHERE (v_h = 0 OR h_h = 0) AND NOT EXISTS "
+            "(SELECT 1 FROM pit p WHERE p.game = game.id)"):
+        # The side that pitched it, and both of them in a double no-hitter.
+        if v_h == 0 and batted_nine(vis_line):
+            found.setdefault((gid, 1), "log")
+        if h_h == 0 and batted_nine(home_line):
+            found.setdefault((gid, 0), "log")
+    return found
+
+
+# A plate appearance that is not an out. The rest of a play-by-play line --
+# a steal, a wild pitch, a pickoff -- is not a plate appearance at all.
+NOT_A_PA = re.compile(r"^(NP|SB|CS|PO|POCS|WP|PB|BK|DI|OA|FLE)")
+AN_OUT = re.compile(r"^(\d|K)")
+
+
+def _perfect_games(conn):
+    """The perfect games, checked against the plays wherever there are plays.
+
+    The box score cannot see a man who reached on an error: Mulholland in 1990
+    and Means in 2021 both allowed no hit, no walk and no hit batsman while
+    facing exactly 27, and neither game was perfect. The play-by-play settles
+    it -- one shows E5/TH/G56, the other a 28th plate appearance -- and is why
+    this returns 23 where the box score alone returns 25.
+
+    Currie's 1926 perfect game for the Chicago American Giants has no
+    play-by-play at all, so it cannot be checked and is not thrown away for
+    that: it is kept and marked as resting on the box score.
+    """
+    out = []
+    for gid, side in conn.execute(
+            "SELECT game, side FROM pit GROUP BY game, side "
+            "HAVING SUM(outs) = 27 AND SUM(h) = 0 AND SUM(bb) = 0 "
+            "AND SUM(bfp) = 27 AND COALESCE(SUM(hbp), 0) = 0"):
+        # pit.side is the side that pitched; play.side is the side that batted.
+        events = [e for (e,) in conn.execute(
+            "SELECT event FROM play WHERE game = ? AND side = ? ORDER BY seq",
+            (gid, 1 - side))]
+        if not events:
+            out.append((gid, side, "box"))
+            continue
+        pa = [e for e in events if not NOT_A_PA.match(e)]
+        # "B-1" in the advances is the batter reaching on a dropped third
+        # strike, which is an out on the scorecard and a man on first.
+        reached = any(not AN_OUT.match(e) or "B-1" in e.split(".", 1)[-1]
+                      for e in pa)
+        if len(pa) == 27 and not reached:
+            out.append((gid, side, "plays"))
+    return out
+
+
+def api_notable(conn):
+    """Games worth reading, rather than games you already know the date of.
+
+    Not a complete list of anything, and the page says so: box scores start in
+    1897, so Bobby Lowe's four home runs in 1894 cannot be here, and the two
+    perfect games of 1880 cannot either. What it is instead is every one of
+    these the data can show, including the ones nobody else lists -- Rube
+    Currie's perfect game in the Negro National League, seventeen Negro League
+    no-hitters, Satchel Paige's two.
+    """
+    rows_ = {k: [] for k, _, _ in NOTABLE_KINDS}
+
+    for (gid, side), source in _no_hit_sides(conn).items():
+        rows_["nohit"].append({"game": gid, "side": side, "source": source})
+    for gid, side, source in _perfect_games(conn):
+        rows_["perfect"].append({"game": gid, "side": side, "source": source})
+    for gid, side, person in conn.execute("""
+            SELECT game, side, person FROM bat
+            WHERE d >= 1 AND t >= 1 AND hr >= 1 AND (h - d - t - hr) >= 1"""):
+        rows_["cycle"].append({"game": gid, "side": side, "person": person,
+                               "source": "box"})
+    for gid, side, person in conn.execute(
+            "SELECT game, side, person FROM bat WHERE hr >= 4"):
+        rows_["fourhr"].append({"game": gid, "side": side, "person": person,
+                                "source": "box"})
+
+    # One pass for the games, one for the names, rather than a query per row.
+    ids = {r["game"] for rs in rows_.values() for r in rs}
+    games = {}
+    for chunk in ([*ids][i:i + 400] for i in range(0, len(ids), 400)):
+        for g in rows(conn.execute(
+                "SELECT id, date, season, gametype, vis, home, vis_score, "
+                "home_score, vis_lg, home_lg FROM game WHERE id IN (%s)"
+                % ",".join("?" * len(chunk)), chunk)):
+            games[g["id"]] = g
+    tnames = team_map(conn, [(g[k], g["season"]) for g in games.values()
+                             for k in ("vis", "home")])
+
+    # The men. A no-hitter names whoever pitched it, which is two or more when
+    # it was combined -- and none at all for a Federal League game, where the
+    # game log knows the result and no box score exists to say who threw it.
+    need = {(r["game"], r["side"]) for r in rows_["nohit"] + rows_["perfect"]}
+    arms = {}
+    for gid, side in need:
+        arms[(gid, side)] = [p for (p,) in conn.execute(
+            "SELECT person FROM pit WHERE game = ? AND side = ? ORDER BY seq",
+            (gid, side))]
+    people = people_map(conn, [p for v in arms.values() for p in v]
+                        + [r.get("person") for rs in rows_.values() for r in rs])
+
+    for kind, rs in rows_.items():
+        for r in rs:
+            g = games[r["game"]]
+            side = r["side"]
+            team = g["home"] if side else g["vis"]
+            opp = g["vis"] if side else g["home"]
+            who = arms.get((r["game"], side), [])
+            if r.get("person"):
+                who = [r["person"]]
+            r.update({
+                "date": g["date"], "season": g["season"],
+                "gametype": g["gametype"],
+                "team": team, "teamName": tnames.get((team, g["season"]), team),
+                "opp": opp, "oppName": tnames.get((opp, g["season"]), opp),
+                "league": g["home_lg"] if side else g["vis_lg"],
+                "score": "%s-%s" % (g["home_score"], g["vis_score"]) if side
+                         else "%s-%s" % (g["vis_score"], g["home_score"]),
+                "who": [{"id": p, "name": people.get(p, p)} for p in who],
+            })
+            r.pop("person", None)
+        rs.sort(key=lambda r: (r["date"], r["game"]), reverse=True)
+
+    return {"kinds": [{"id": k, "label": lab, "note": note, "n": len(rows_[k])}
+                      for k, lab, note in NOTABLE_KINDS],
+            "rows": rows_}
+
+
 ROUTES = {
     "/api/meta": lambda q, c: api_meta(q, c),
     "/api/search": lambda q, c: api_search(q, c),
     "/api/games": lambda q, c: api_games(q, c),
     "/api/teams": lambda q, c: api_teams(q, c),
+    "/api/notable": lambda q, c: api_notable(c),
 }
 
 

@@ -60,6 +60,7 @@ for u in \
   "team/NYA?season=1927" \
   "team/NYA" \
   "park/NYC16" \
+  "notable" \
   "search?q=ruth"
 do
   f=$(printf '%s' "$u" | tr '/?&=' '____')

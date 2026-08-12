@@ -173,6 +173,17 @@ async function main() {
      'plays.53.subs.0.person', 'plays.53.subs.0.pos', 'plays.53.subs.0.side',
      'plays.86.subs.0.person', 'plays.86.subs.0.pos', 'plays.86.subs.0.side']);
 
+  /* The notable games. build_site.py calls app.py for these rather than
+     restating the queries, so this is checking that the file it wrote is the
+     file api-local serves -- the counts, and the rows either end of the
+     perfect games, where the play-by-play check does its work. */
+  compare('/notable', await API.get('/notable'), fixture('notable'),
+    ['kinds.0.id', 'kinds.0.n', 'kinds.1.id', 'kinds.1.n', 'kinds.2.n', 'kinds.3.n',
+     ...rowPaths('rows.perfect', 3, ['game', 'date', 'source', 'who.0.name']),
+     ...rowPaths('rows.nohit', 6, ['game', 'date', 'team', 'source']),
+     ...rowPaths('rows.cycle', 4, ['game', 'who.0.name']),
+     ...rowPaths('rows.fourhr', 4, ['game', 'who.0.name', 'teamName'])]);
+
   // --- a career: every season row and the fielding breakdown
   compare('/player/ruthb101', await API.get('/player/ruthb101'), fixture('player_ruthb101'),
     ['person.name', 'person.hof', 'person.bats', 'person.throws', 'person.height',

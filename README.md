@@ -6,7 +6,10 @@ full box score. Python standard library only — no pip installs.
 
 It is the sibling of `baseball-records`, which does the same job over the
 Lahman database. That one answers *what did he do in 1927*; this one answers
-*what did he do on the 12th of August*. **A change to one front end is not
+*what did he do on the 12th of August* — and, for a reader who has no date in
+mind, the Notable tab answers *show me something worth reading*: the
+no-hitters, perfect games, cycles and four-home-run games, derived from these
+box scores rather than copied from anyone's list. **A change to one front end is not
 finished until the other has it** — and the iOS port, `baseball-games-ios`,
 counts as a front end.
 

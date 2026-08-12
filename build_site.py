@@ -285,6 +285,23 @@ def export_plays(conn):
              % (total / 1048576, f"{sum(len(v) for v in shards.values()):,}")))
 
 
+def export_notable():
+    """The notable games, from app.py itself rather than from a copy of it.
+
+    Every other export restates its query here and leans on test_views.sh to
+    prove the two agree. These four definitions are too fiddly for that: a
+    `>= 27` that became `= 27` on one side, or a play-by-play check dropped
+    from this half, would be a disagreement no fixture would notice. So this
+    calls the reference implementation and writes down what it answered.
+    """
+    import app
+    path = os.path.join(DATA, "notable.json")
+    d = app.api_notable(app.db())
+    write(path, d)
+    report("notable.json", path,
+           ", ".join("%s %s" % (k["n"], k["label"].lower()) for k in d["kinds"]))
+
+
 def export_reference(conn):
     teams = conn.execute(
         "SELECT id, season, league, city, nickname FROM team ORDER BY season, id").fetchall()
@@ -489,6 +506,7 @@ def main():
     export_roles(conn)
     export_plays(conn)
     export_reference(conn)
+    export_notable()
 
     print("Season shards")
     seasons = [r[0] for r in conn.execute(

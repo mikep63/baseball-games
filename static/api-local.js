@@ -543,6 +543,12 @@ window.LocalAPI = (function () {
     return { game: gid, plays, total: plays.length };
   }
 
+  /* The one export written by app.py itself rather than restated here, so
+     there is nothing to translate: the file is the answer. 190 KB, and `load`
+     caches it, so it is fetched the first time the tab is opened and not
+     again. */
+  const notable = () => load('notable.json');
+
   async function park(id) {
     const pk = await parks();
     const p = pk.by.get(id);
@@ -568,6 +574,7 @@ window.LocalAPI = (function () {
     let mp = p.match(/^\/game\/([A-Z0-9]+)\/plays$/);
     if (mp) return gamePlays(mp[1]);
     if (p === '/teams') return teamsList(q);
+    if (p === '/notable') return notable();
     if ((m = p.match(/^\/game\/([A-Z0-9]+)$/))) return game(m[1]);
     if ((m = p.match(/^\/player\/([a-z0-9]+)\/games$/))) return playerGames(m[1], q);
     if ((m = p.match(/^\/player\/([a-z0-9]+)$/))) return player(m[1]);

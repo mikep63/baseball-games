@@ -77,7 +77,7 @@ function loadApp() {
   const cut = src.indexOf('// --------------------------------------------------------------------- boot');
   const body = src.slice(0, cut);
   return new Function(body + '\nreturn {viewGames, viewGame, viewPlayer, viewTeam, ' +
-    'viewTeams, viewDay, viewPark, viewSearch, viewAbout, ' +
+    'viewTeams, viewDay, viewPark, viewSearch, viewAbout, viewNotable, ' +
     'weekdayOf, monthsBetween, dayBucket, gamesHash, describePlay, playsHTML, ' +
     'setMeta: m => { META = m; }};')();
 }
@@ -244,6 +244,22 @@ async function main() {
     ['teams — 1927', () => V.viewTeams([], Q({ season: 1927 })), h => h.includes('Clubs in 1927')],
     ['park — Yankee Stadium', () => V.viewPark(['NYC16']), h => h.includes('Games')],
     ['search — ruth', () => V.viewSearch([], Q({ q: 'ruth' })), h => h.includes('Babe Ruth')],
+    /* The notable list defaults to the first kind, and every row reaches its
+       game. Larsen's is the one everybody knows; it has to be in the perfect
+       games and it has to be a link. */
+    ['notable — defaults to the no-hitters', () => V.viewNotable([], Q({})),
+      h => h.includes('Games worth reading') && h.includes('id="n-kind"')
+        && h.includes('#/game/')],
+    ['notable — the perfect games are Larsen and 22 others',
+      () => V.viewNotable([], Q({ kind: 'perfect' })),
+      h => h.includes('Don Larsen') && h.includes('#/game/NYA195610080')
+        /* Currie's is the one no official list carries, and the one with no
+           play-by-play to check it against, so it is marked. */
+        && h.includes('Reuben Curry') && h.includes('box score')],
+    /* An unknown kind must not render an empty page: it falls back to the
+       first, which is what a stale bookmark deserves. */
+    ['notable — an unknown kind falls back', () => V.viewNotable([], Q({ kind: 'zzz' })),
+      h => h.includes('Games worth reading') && h.includes('#/game/')],
     /* The About page says what the data can and can't say. What it must not
        say is the licence notice: index.html's footer stands under every view,
        so a copy in the body showed it twice on this one page. */
