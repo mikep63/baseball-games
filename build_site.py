@@ -272,8 +272,14 @@ def export_plays(conn):
         blob = json.dumps({"c": ["game", "inning", "side", "batter", "count",
                                  "event", "sub"], "r": rows_},
                           separators=(",", ":")).encode("utf-8")
-        with gzip.open(path, "wb", compresslevel=9) as f:
-            f.write(blob)
+        # mtime=0 and an empty name, so the same plays compress to the same
+        # bytes. gzip stamps the clock into its header by default, which made
+        # every build rewrite all 2,982 shards -- 115 MB of new blobs in a
+        # committed docs/ for data that had not changed.
+        with open(path, "wb") as raw:
+            with gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=9,
+                               mtime=0, filename="") as f:
+                f.write(blob)
         size = os.path.getsize(path)
         total += size
         biggest = max(biggest, size)
