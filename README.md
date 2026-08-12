@@ -107,14 +107,20 @@ Worth knowing before trusting a number:
   appears under both leagues rather than being assigned to one. 239,636 games
   carry a league on both sides; the 355 that carry neither are clubs Retrosheet
   gives no circuit for.
-- **The Negro Leagues are still a game *type* as well as a league**, which is
-  one place too many. `negro` covers 4,654 games that are really the regular
-  seasons of seven distinct circuits, the East-West All-Star Game, the Negro
-  World Series — 420 games between the NAL and the NN2, 1937–48 — and
-  barnstorming exhibitions against major-league squads. Separating them is a
-  research question, not a mechanical one, and until it is answered the league
-  filter carries the distinction the calendar needed and the type column
-  repeats it.
+- **The kind of game is Retrosheet's word, not ours.** The box files carry
+  `info,gametype` and this did not read it for years, so 4,654 games sat under
+  a type called `negro` — a league wearing a game type's clothes. The source
+  calls them regular seasons, exhibitions, championship series, league
+  championship series, All-Star games and one playoff, and that is what they
+  are now. 925 of them carry no such record and are read as regular season,
+  because a game the source does not describe cannot be described from the
+  clubs' names without inventing a record Retrosheet never wrote.
+- **Where the game logs and the box files disagree, the log wins.** Sixteen
+  box files call a game `playoff` that the game logs count in the regular
+  season: the pennant tie-breakers, Thomson's among them. The published record
+  counts those in the regular season too, so the log decides for any game it
+  carries and the box file's word is used only for the 4,658 games the logs
+  never listed.
 - **Managers and umpires are on every game; coaches are on none.** 2,709 people
   in the database never played, and their record is counted the same way a
   pitcher's decisions are — from the game rather than from a box score. The

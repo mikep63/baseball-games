@@ -27,15 +27,6 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data", "retrosheet")
 DB_PATH = os.path.join(BASE, "retro.sqlite")
 
-# The game logs spell the Kansas City Athletics OAK -- the franchise's modern
-# code -- while the box scores, event files, rosters and TEAMyyyy directories
-# all use the era code KC1. Every other club in every other era agrees between
-# the two, so this is the entire difference rather than the first entry in a
-# growing list. Left uncorrected it costs 1,029 games their box scores.
-#
-# Self-healing: check_team_fixes reports an entry that no longer changes
-# anything, so a release that normalises this upstream leaves a dead line here
-# that says so rather than silently rotting.
 # Empty since the summer 2026 release, which is the release that fixed it: the
 # Kansas City Athletics were OAK in the game logs and KC1 everywhere else from
 # 1955 to 1967, and uncorrected it cost 1,029 games their box scores. All 2,060
@@ -443,16 +434,22 @@ def load_gamelogs(conn):
 
 # -------------------------------------------------------------- box scores
 
-BOX_SOURCES = [("boxes/*.EB[AN]", None),          # AL/NL regular season, 1897-
-                ("ebe/*.EBE", "postseason"),      # All-Star and post-season
-                ("ngl_b/*.EBR", "negro")]         # Negro Leagues
+BOX_SOURCES = ["boxes/*.EB[AN]",   # AL/NL regular season, 1897-
+               "ebe/*.EBE",        # All-Star and post-season
+               "ngl_b/*.EBR"]      # Negro Leagues
 
-# The kind above is only used for a game the game logs never listed. Every
-# World Series and All-Star game is in a log of its own and keeps the type that
-# log gives it; what falls through is a series the logs don't carry, and the
-# only ones are postseason. Left as None these arrived as regular season -- the
-# 1900 Chronicle-Telegraph Cup, four games in the summer 2026 release, filed
-# into Pittsburgh's and Brooklyn's regular seasons without a word.
+# Retrosheet writes the kind of game into the box file as `info,gametype`, and
+# this had never read it. Its vocabulary, mapped onto the game logs' own where
+# the two say the same thing in different words.
+#
+# Only ever consulted for a game the game logs do not carry. Where they do, the
+# log decides: the sixteen games the box files call `playoff` are the pennant
+# tie-breakers, Thomson's among them, and the game logs put those in the
+# regular season because that is where the published record counts them.
+BOX_GAMETYPES = {"regular": "regular", "exhibition": "exhibition",
+                 "championship": "championship", "lcs": "lcs",
+                 "allstar": "allstar", "divisionseries": "division",
+                 "playoff": "playoff"}
 
 
 def load_boxes(conn, known):
@@ -489,7 +486,7 @@ def load_boxes(conn, known):
                 total[name] += len(rows)
                 del rows[:]
 
-    for pattern, kind in BOX_SOURCES:
+    for pattern in BOX_SOURCES:
         for path in sorted(glob.glob(rel(pattern))):
             gid, info, lines = None, {}, {}
             for raw in open(path, encoding="latin-1", errors="replace"):
@@ -498,7 +495,7 @@ def load_boxes(conn, known):
                 if t == "id":
                     if gid:
                         if gid not in known:
-                            headers.append(_synth_header(gid, info, lines, kind))
+                            headers.append(_synth_header(gid, info, lines))
                         else:
                             weather.append(_weather(gid, info))
                     gid, info, lines = p[1], {}, {}
@@ -541,7 +538,7 @@ def load_boxes(conn, known):
                                     None, None, None))
             if gid:
                 if gid not in known:
-                    headers.append(_synth_header(gid, info, lines, kind))
+                    headers.append(_synth_header(gid, info, lines))
                 else:
                     weather.append(_weather(gid, info))
             flush()
@@ -599,8 +596,15 @@ def _weather(gid, info):
             word("winddir"), stat(info.get("windspeed")), word("starttime"), gid)
 
 
-def _synth_header(gid, info, lines, kind):
-    """A game row for a game the game logs never listed (the Negro Leagues)."""
+def _synth_header(gid, info, lines):
+    """A game row for a game the game logs never listed (the Negro Leagues).
+
+    The kind of game comes from the file's own `info,gametype`. 925 of the
+    Negro League games do not carry one and are read as regular season, which
+    is the only thing that can be said about a game the source does not
+    describe -- guessing from the clubs' names would be inventing a record
+    Retrosheet did not write.
+    """
     date = iso(info.get("date"))
     season = int(date[:4]) if date else None
     vs, hs = None, None
@@ -612,7 +616,7 @@ def _synth_header(gid, info, lines, kind):
             else:
                 hs = total
     return (gid, date, info.get("number") or "0", season,
-            kind or "regular", None,
+            BOX_GAMETYPES.get(info.get("gametype"), "regular"), None,
             info.get("visteam"), None, info.get("hometeam"), None,
             vs, hs, info.get("site"), num(info.get("attendance")),
             num(info.get("timeofgame")), info.get("daynight"),

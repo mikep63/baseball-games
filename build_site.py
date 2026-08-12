@@ -24,8 +24,8 @@ import shutil
 import sqlite3
 import sys
 
-GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "postseason",
-                  "worldseries", "allstar", "negro"]
+GAMETYPE_ORDER = ["regular", "playoff", "wildcard", "division", "lcs",
+                  "championship", "worldseries", "allstar", "exhibition"]
 
 # app.py's LEAGUE_ORDER and LEAGUES. MLB leads where it exists; before 1901 the
 # senior circuit leads because MLB is simply not in that season's list.
@@ -365,9 +365,10 @@ def export_meta(conn, seasons):
                                "lcs": "League Championship Series",
                                "division": "Division Series",
                                "wildcard": "Wild Card",
-                               "postseason": "Postseason series",
-                               "allstar": "All-Star Game",
-                               "negro": "Negro Leagues"},
+                               "championship": "Championship series",
+                               "playoff": "Playoff",
+                               "exhibition": "Exhibition",
+                               "allstar": "All-Star Game"},
                  "leagues": LEAGUES, "seasonLeagues": by_league})
     report("meta.json", path)
 

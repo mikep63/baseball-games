@@ -31,8 +31,8 @@ POSITIONS = {1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF",
 
 # The order a season's rounds are played in, so the filter reads down the
 # calendar rather than in whatever order the rows came back.
-GAMETYPE_ORDER = ["regular", "wildcard", "division", "lcs", "postseason",
-                  "worldseries", "allstar", "negro"]
+GAMETYPE_ORDER = ["regular", "playoff", "wildcard", "division", "lcs",
+                  "championship", "worldseries", "allstar", "exhibition"]
 
 # A league is not a kind of game, and the two were the same column for as long
 # as the Negro Leagues were a gametype: 1933 offered "Negro Leagues" beside
@@ -82,12 +82,14 @@ def league_params(code):
     return [code, code]
 
 
-# "postseason" is a championship series a season had before there was a World
-# Series to call it -- the 1900 Chronicle-Telegraph Cup is the only one so far.
+# Retrosheet's own vocabulary, from the game-log filenames and from the box
+# files' `info,gametype`. "negro" is gone: a league is not a kind of game, and
+# those 4,654 games say for themselves which kind they were.
 GAMETYPES = {"regular": "Regular season", "worldseries": "World Series",
              "lcs": "League Championship Series", "division": "Division Series",
-             "wildcard": "Wild Card", "postseason": "Postseason series",
-             "allstar": "All-Star Game", "negro": "Negro Leagues"}
+             "wildcard": "Wild Card", "championship": "Championship series",
+             "playoff": "Playoff", "exhibition": "Exhibition",
+             "allstar": "All-Star Game"}
 
 
 def db():

@@ -106,7 +106,7 @@ async function main() {
        listing the season, which is what this tab was built to stop doing. */
     ['games (1927) — regular season only', () =>
       V.viewGames([], Q({ season: 1927, gametype: 'regular' })),
-      h => h.includes('cal-month') && h.includes('1,236 games in 1927')
+      h => h.includes('cal-month') && h.includes('1,242 games in 1927')
         && !h.includes('table-wrap')],
     /* A park narrows like a club does, and unlike a club it has no select,
        so the view has to name it and offer a way off it. */
@@ -189,13 +189,15 @@ async function main() {
     ['player — Ruth, 1927 log', () => V.viewPlayer(['ruthb101', 'games'], Q({ season: 1927 })),
       h => h.includes('1927 game log') && h.includes('← Babe Ruth')
         && h.includes('href="#/player/ruthb101"')],
-    /* Every one of his 741 games is gametype 'negro', so a page that showed
-       the regular season alone showed him nothing at all. 971 hits and 188
-       home runs: it was 633 and 116 until the summer 2026 release put the
-       1933 and 1934 seasons back in the middle of his prime. */
-    ['player — Josh Gibson, Negro Leagues only', () => V.viewPlayer(['gibsj101'], Q({})),
-      h => h.includes('Josh Gibson') && h.includes('Negro Leagues')
-        && h.includes('>971<') && h.includes('>188<')],
+    /* His 741 games used to be one bucket called "Negro Leagues", which was
+       a league wearing a game type's clothes. Retrosheet says what each of
+       them was: 509 regular-season games -- 679 hits, 136 home runs -- and
+       then exhibitions, championship series and the East-West All-Star Game
+       as sections of their own. */
+    ['player — Josh Gibson, by the kind of game', () => V.viewPlayer(['gibsj101'], Q({})),
+      h => h.includes('Josh Gibson') && h.includes('>679<') && h.includes('>136<')
+        && h.includes('Exhibition') && h.includes('Championship series')
+        && h.includes('All-Star Game') && !h.includes('Negro Leagues')],
     /* A pitcher's line is read for W-L-ERA before anything else, and none of
        the six are in Retrosheet's box score -- 1913 is 36-7, 36 GS, 29 CG,
        11 SHO. */
