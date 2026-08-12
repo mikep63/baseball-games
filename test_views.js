@@ -294,14 +294,14 @@ async function main() {
   [['K/C', 'Strikeout looking.'],
    ['K', 'Strikeout.'],
    ['53/G5', 'Ground ball out, third baseman to first baseman.'],
-   ['9/L89', 'Line drive out to the right fielder.'],
-   ['HR/F9LD', 'Home run.'],
+   ['9/L89', 'Line drive out to right-center.'],
+   ['HR/F9LD', 'Home run down the right-field line.'],
    ['W', 'Walk.'],
    ['IW', 'Intentional walk.'],
    ['HP', 'Hit by pitch.'],
    ['S8/L.2-H;1-3', 'Single to center field. Runner on second scored. Runner on first to third.'],
    ['S67/G6+', 'Single to shortstop.'],
-   ['D7/L7L.2-H', 'Double to left field. Runner on second scored.'],
+   ['D7/L7L.2-H', 'Double down the left-field line. Runner on second scored.'],
    ['E6/G6', 'Reached on an error by the shortstop.'],
    ['64(1)3/GDP', 'Double play, shortstop to second baseman to first baseman.'],
    ['SB2', 'Stole second.'],
@@ -313,6 +313,34 @@ async function main() {
     check('play — ' + ev, got.known && got.text === want,
       got.known ? got.text : 'unparsed');
   });
+  /* The hit locations, which live inside the trajectory modifier and are
+     documented by Retrosheet only in a diagram. The grammar was read off the
+     data, so these check each part of it: the zone, the two-man gaps, the
+     depth, the line, foul ground, and the one ball with its own name. */
+  [['HR/F78XD', 'Home run to extra deep left-center.'],
+   ['S8/L8S', 'Single to shallow center field.'],
+   ['S6/G6M', 'Single up the middle.'],
+   ['S7/G56', 'Single between third and short.'],
+   ['D9/F89D', 'Double to deep right-center.'],
+   ['8/F8D', 'Fly ball out to deep center field.'],
+   ['9/F9LF', 'Fly ball out down the right-field line in foul ground.'],
+   ['3/L3F', 'Line drive out into foul ground by first base.'],
+   /* Depth is dropped on a bare infield position -- "deep shortstop" is not a
+      place -- and a ground ball keeps its chain of fielders either way. */
+   ['5/G5S', 'Ground ball out to the third baseman.'],
+   ['63/G6M', 'Ground ball out, shortstop to first baseman.'],
+   // An unlocated modifier still reads: most games before 1989 have none.
+   ['S8/L', 'Single to center field.'],
+  ].forEach(([ev, want]) => {
+    const got = V.describePlay(ev);
+    check('location — ' + ev, got.known && got.text === want,
+      got.known ? got.text : 'unparsed');
+  });
+  /* A code the grammar does not cover must leave the sentence alone rather
+     than drop a wrong place into it. */
+  check('location — an unknown zone is left unsaid',
+    V.describePlay('S/L99XX').text === 'Single.', V.describePlay('S/L99XX').text);
+
   /* An event it has never seen must read as shorthand, not as a wrong
      sentence: the fallback is the honest half of the parser. */
   const odd = V.describePlay('ZZ9/QQ');

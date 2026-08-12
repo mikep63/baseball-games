@@ -850,13 +850,61 @@ const TRAJECTORY = { G: 'ground ball', L: 'line drive', F: 'fly ball',
 
 const BASE_NAME = { 1: 'first', 2: 'second', 3: 'third', H: 'home', B: 'the batter' };
 
+/* Where the ball went. The location rides inside the trajectory modifier --
+   "F9LD" is a fly ball to 9LD -- and Retrosheet documents the zones only in a
+   diagram, hitloc.jpg, so this grammar is read off our own data: a zone of one
+   or two fielder positions, then a side (L, R, M), a depth (S, D, XD) and F for
+   foul. 95 distinct codes cover 867,364 located balls since 2015.
+
+   Coverage is a property of the era, not of the play. From 1989 about 97% of
+   trajectories carry a location; before 1988 it is under 27% and erratic --
+   24% in 1925, 2.4% in 1950, 26% in 1985 -- so an old game reading bare is the
+   source being silent, and the About page says so.
+
+   Depth is dropped on the bare infield positions: "deep shortstop" is not a
+   place, and the fielder is already the location there. It stays on the
+   outfield and on the zones between two men, where it is most of the news. */
+const LOC_ZONE = {
+  1: 'the pitcher', 2: 'the plate', 3: 'first base', 4: 'second base',
+  5: 'third base', 6: 'shortstop', 7: 'left field', 8: 'center field',
+  9: 'right field', 13: 'between the mound and first',
+  15: 'between the mound and third', 23: 'between the plate and first',
+  25: 'between the plate and third', 34: 'between first and second',
+  56: 'between third and short', 78: 'left-center', 89: 'right-center',
+};
+const LOC_DEPTH = { S: 'shallow', D: 'deep', XD: 'extra deep' };
+const OUTFIELD = new Set(['7', '8', '9', '78', '89']);
+
+function locationPhrase(code) {
+  const m = /^(\d{1,2})([LRM]*)(XD|S|D)?(F?)W?$/.exec(code || '');
+  if (!m || !LOC_ZONE[+m[1]]) return '';
+  const [, zone, side, depth, foul] = m;
+  const place = LOC_ZONE[+zone];
+  // "6M" and "4M" are the one ball everybody has a name for already.
+  if (side.includes('M') && (zone === '4' || zone === '6')) return 'up the middle';
+  // Down the line, which the side letter means only in the corner outfields.
+  if (side.includes('L') && (zone === '7' || zone === '9')) {
+    const line = zone === '7' ? 'down the left-field line' : 'down the right-field line';
+    return foul ? line + ' in foul ground' : line;
+  }
+  // In centre, the side letter is the half of the field, which is the gap.
+  const named = (side.includes('L') && zone === '8') ? 'left-center'
+    : (side.includes('R') && zone === '8') ? 'right-center' : place;
+  const deep = depth && (OUTFIELD.has(zone) || zone.length === 2) ? LOC_DEPTH[depth] : '';
+  const where = (deep ? deep + ' ' : '') + named;
+  if (foul) return 'into foul ground by ' + place;
+  return where.startsWith('between') || where.startsWith('up ') ? where : 'to ' + where;
+}
+
 const fielders = s => [...String(s)].map(d => FIELDER[+d]).filter(Boolean);
 
 /* The basic play. Order matters: POCS before PO, HP before H, IW before W,
    DGR before D -- each longer code would otherwise be eaten by its prefix. */
 function describeBasic(play, mods) {
-  const traj = mods.map(m => (m.match(/^(BG|BP|BL|G|L|F|P)(?![A-Z])/) || [])[1])
-    .find(Boolean);
+  // The trajectory and the location are one modifier: "F9LD" is both.
+  const hit = mods.map(m => m.match(/^(BG|BP|BL|G|L|F|P)(\d[A-Z0-9]*)?$/)).find(Boolean);
+  const traj = hit && hit[1];
+  const where = hit && hit[2] ? locationPhrase(hit[2]) : '';
   const shape = TRAJECTORY[traj];
   const dp = mods.some(m => /^(GDP|LDP|FDP|BGDP|BPDP|DP)$/.test(m));
   const tp = mods.some(m => /^(GTP|LTP|TP)$/.test(m));
@@ -887,11 +935,13 @@ function describeBasic(play, mods) {
   // is the one who fielded it.
   if ((m = play.match(/^([SDT])(\d*)(?![A-Z])/)) && !play.startsWith('DGR')) {
     const kind = { S: 'Single', D: 'Double', T: 'Triple' }[m[1]];
-    return kind + (m[2] ? ' to ' + HIT_TO[+m[2][0]] : '');
+    // The location when it was recorded, the fielder who took it when it
+    // wasn't: "S8" says only that centre field handled the ball.
+    return kind + (where ? ' ' + where : m[2] ? ' to ' + HIT_TO[+m[2][0]] : '');
   }
   if (play.startsWith('DGR')) return 'Ground-rule double';
   if ((m = play.match(/^HR?(\d*)/)) && !play.startsWith('HP')) {
-    return 'Home run' + (m[1] ? ' to ' + HIT_TO[+m[1][0]] : '');
+    return 'Home run' + (where ? ' ' + where : m[1] ? ' to ' + HIT_TO[+m[1][0]] : '');
   }
   if (play.startsWith('HP')) return 'Hit by pitch';
   if (play.startsWith('K')) {
@@ -912,8 +962,14 @@ function describeBasic(play, mods) {
     const out = tp ? 'Triple play' : dp ? 'Double play'
       : sf ? 'Sacrifice fly' : sh ? 'Sacrifice bunt'
       : shape ? shape.charAt(0).toUpperCase() + shape.slice(1) + ' out' : 'Out';
+    /* A ball caught in the air is better placed than named: the man who
+       settled under it is not always where it was hit, and "F78XD" is an
+       extra-deep drive to the gap that the centre fielder ran down. On the
+       ground the chain of fielders already says where it went. */
+    const air = ['F', 'P', 'L', 'BP', 'BL'].includes(traj);
     return who.length > 1 ? `${out}, ${who.join(' to ')}`
-      : `${out}${who.length ? ' to the ' + who[0] : ''}`;
+      : `${out}${air && where ? ' ' + where
+                 : who.length ? ' to the ' + who[0] : ''}`;
   }
   return null;   // unrecognised: the caller shows the shorthand instead
 }
@@ -1547,6 +1603,12 @@ async function viewAbout() {
       scored.” The shorthand stays beside the English, because it is what
       Retrosheet actually wrote, and where the expansion has nothing to say it
       is all there is.</p>
+    <p class="note">Where the ball went is read too, from the codes Retrosheet
+      writes inside the play — “F78XD” is an extra-deep drive to left-center.
+      From 1989 nearly every batted ball carries one; before that it is patchy
+      and not in a straight line — 26% of them in 1985, 2.4% in 1950, 24% in
+      1925 — so an older game reading without one is the source being silent,
+      not the page losing it.</p>
     <p class="note">What the plays don't carry here: pitch sequences — ball,
       called strike, foul, in play — are in the files from 1988 but are not
       read in, being two fifths of the bytes for the shape of a plate

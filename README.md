@@ -108,6 +108,14 @@ Worth knowing before trusting a number:
   expanded is ever stored — `describePlay` in `app.js` does it at the moment of
   reading. It handles 100% of a 232,535-play sample, and anything it does not
   recognise is shown as shorthand rather than as a confidently wrong sentence.
+- **Hit locations start in 1989.** They are written inside the trajectory
+  modifier — `F78XD` is an extra-deep fly to left-centre — and Retrosheet
+  documents the zones only in a diagram, `hitloc.jpg`, so `locationPhrase` in
+  `app.js` reads a grammar taken off the data: 95 codes over 17 zones, a side,
+  a depth and a foul flag. From 1989 about 97% of batted balls carry one.
+  Before 1988 it is erratic rather than absent — 26% in 1985, 2.4% in 1950,
+  24% in 1925 — which is why the About page says so on the page rather than
+  letting an old game look broken.
 - **A substitution names the man arriving and no one else.** Retrosheet holds
   the place of a change with an `NP` play — "no play" — and names the man in
   the `sub` record after it; 1,787,561 of them are loaded, keyed to the play
