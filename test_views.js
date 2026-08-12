@@ -172,6 +172,12 @@ async function main() {
       h => h.includes('id="f-league"') && h.includes('table-wrap')],
     ['game — Larsen perfect game', () => V.viewGame(['NYA195610080']),
       h => h.includes('Don Larsen') && h.includes('linescore') && h.includes('Yankee Stadium')],
+    /* The wind blew out to left field that day, and Retrosheet writes that
+       "tolf". The page had been printing the code; before that the export was
+       not carrying it at all. */
+    ['game — the wind reads as English, not as a Retrosheet code',
+      () => V.viewGame(['NYA195610080']),
+      h => h.includes('out to left field') && !h.includes('tolf')],
     /* Maldonado hit two, in the 7th and the 9th. He is named once with the
        count and both accounts, not twice as though they were separate men --
        and the runners aboard appear at all, which they had never done. */

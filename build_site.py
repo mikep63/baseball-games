@@ -56,7 +56,11 @@ PLAYS = os.path.join(DATA, "plays")
 # totals, and carrying them would roughly double every shard for nothing.
 GAME_COLS = ("id,date,number,gametype,vis,home,vis_score,home_score,park,"
              "attendance,duration,vis_line,home_line,has_box,has_pbp,daynight,"
-             "temp,sky,wind_speed,start_time,ump_hp,ump_1b,ump_2b,ump_3b,"
+             # wind_dir was missing here while the view rendered it, so the
+             # published site read "12 mph" where app.py read "12 mph, tocf"
+             # -- 72,740 games with a direction, and no fixture comparing a
+             # weather field to notice.
+             "temp,sky,wind_speed,wind_dir,start_time,ump_hp,ump_1b,ump_2b,ump_3b,"
              # The outfield pair is only used by a six-man crew -- 1,947 games,
              # all of them October or the All-Star Game -- but dropping them
              # cost Larsen's perfect game two of its six umpires here while

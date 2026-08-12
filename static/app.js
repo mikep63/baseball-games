@@ -641,6 +641,19 @@ function tally(entries) {
 
 const tb = b => (b.h || 0) + (b.d || 0) + 2 * (b.t || 0) + 3 * (b.hr || 0);
 
+/* Which way the wind blew, in Retrosheet's eight codes rather than in English:
+   "ltor" for 15,357 games, "tocf" for 10,792. Expanded here for the same reason
+   the plays are -- the file's own shorthand is what is stored, and a page that
+   printed "12 mph, tocf" would be quoting a code at the reader. "unknown" is
+   the ninth value and the honest thing to do with it is say nothing. */
+const WIND_DIR = {
+  ltor: 'left to right', rtol: 'right to left',
+  tolf: 'out to left field', tocf: 'out to center field',
+  torf: 'out to right field', fromlf: 'in from left field',
+  fromcf: 'in from center field', fromrf: 'in from right field',
+};
+const windDir = code => WIND_DIR[code] || '';
+
 /* The notes a modern box score carries under the line-ups, grouped the way
    MLB's Gameday groups them: Batting, Baserunning, Fielding, then the
    pitching notes.
@@ -746,8 +759,12 @@ function gameInfoHTML(g, park, p, pitching) {
     ? `${Math.floor(g.duration / 60)}:${String(g.duration % 60).padStart(2, '0')}` : '');
   add('Weather', esc([g.temp ? g.temp + '°F' : '',
     g.sky && g.sky !== 'unknown' ? g.sky : ''].filter(Boolean).join(', ')));
-  add('Wind', esc(g.wind_speed
-    ? `${g.wind_speed} mph${g.wind_dir && g.wind_dir !== 'unknown' ? ', ' + g.wind_dir : ''}` : ''));
+  /* A calm is a reading, not a gap. 12,817 games record 0 mph, and testing the
+     number for truth threw every one of them away -- and the direction beside
+     it with them. 1,749 more carry a direction and no speed at all, which used
+     to print nothing rather than "out to left field". */
+  add('Wind', esc([g.wind_speed != null ? g.wind_speed + ' mph' : '',
+                   windDir(g.wind_dir)].filter(Boolean).join(', ')));
   add('Umpires', UMP_SPOTS.map(([k, spot]) => (p[k] ? `${spot}: ${p[k]}` : null))
     .filter(Boolean).map(esc).join('. '));
   add('Managers', esc([p.mgr_vis, p.mgr_home].filter(Boolean).join(' / ')));

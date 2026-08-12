@@ -112,6 +112,11 @@ async function main() {
   compare(`/game/${gid}`, await API.get('/game/' + gid), fixture('game_NYA195610080'),
     ['game.visName', 'game.homeName', 'game.vis_score', 'game.home_score',
      'game.gametypeLabel', 'game.attendance', 'game.duration', 'game.v_h', 'game.h_e',
+     /* The whole weather block. wind_dir was rendered by the view and
+        missing from the export for as long as both existed, because no
+        fixture compared a weather field. */
+     'game.temp', 'game.sky', 'game.wind_speed', 'game.wind_dir',
+     'game.start_time', 'game.daynight',
      'game.visLine.0', 'game.homeLine.3', 'park.name',
      // Larsen's perfect game had a six-man crew. The export carried four of
      // them for as long as it existed, and this line is why that went unseen.
