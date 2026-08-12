@@ -17,9 +17,9 @@ function avg(h, ab) {
   return (h / ab).toFixed(3).replace(/^0/, '');
 }
 
-/* Blank, not 0.00, when the earned runs were never recorded: 1907 has them for
-   12 of its 3,229 pitching lines and 1908 for 15, so every pitcher in those
-   seasons summed to NULL and read as though he had allowed nothing. */
+/* Blank, not 0.00, when the earned runs were never recorded: 1906 has them for
+   17 of its 3,090 pitching lines and 1907 for 1,635 of 3,229, so a pitcher in
+   those seasons summed to NULL and read as though he had allowed nothing. */
 function era(er, outs) {
   if (!outs || er === null || er === undefined) return '';
   return (er * 27 / outs).toFixed(2);
@@ -270,11 +270,11 @@ const boxLinkHTML = (g, suffix) => {
     esc(title)}">${has ? 'box' : 'game'}${esc(suffix || '')}</a>`;
 };
 
-// What else Retrosheet holds, not something to click: the play-by-play is on
-// file for 204,643 games but isn't a view yet.
+// What else Retrosheet holds, not something to click in itself: the play-by-play
+// is on file for 207,450 games, and the box link beside this one opens it.
 const onFileHTML = g =>
   (g.has_pbp ? '<span class="pill quiet" title="Retrosheet has a'
-    + ' pitch-by-pitch account of this game. Not shown here yet.">plays</span>' : '');
+    + ' pitch-by-pitch account of this game. Open the game to read it.">plays</span>' : '');
 
 /* The games of the chosen day. No Date column: the heading above it is the
    date, and repeating it in every row says nothing. The link stays where the
@@ -637,7 +637,8 @@ const tb = b => (b.h || 0) + (b.d || 0) + 2 * (b.t || 0) + 3 * (b.hr || 0);
    itemises home runs, steals and double plays as events, but not those.
    Anything needing to know the base-out state when a ball was hit (two-out
    RBI, runners left in scoring position, RISP) is absent on purpose: those
-   need the play-by-play, and this build reads the box-score layer. */
+   would mean replaying the innings, and this summary is built from the
+   box-score tables, which carry the totals and not the state. */
 function boxSummaryHTML(batting, pitching, events, teamBox, sides) {
   const byKind = {};
   events.forEach(e => (byKind[e.kind] = byKind[e.kind] || []).push(e));
@@ -780,7 +781,7 @@ async function viewGame(parts) {
       </div>
       <div>${esc(g.gametypeLabel)}${g.has_pbp
         ? '<span class="pill quiet" title="Retrosheet has a pitch-by-pitch'
-          + ' account of this game. This app doesn\'t show it yet.">'
+          + ' account of this game, below the box score.">'
           + 'play-by-play on file</span>'
         : ''}</div>
     </div>
@@ -826,7 +827,7 @@ async function viewGame(parts) {
 
 /* Retrosheet's event notation, expanded where it is read rather than stored
    expanded. "S8/L.2-H" is eight bytes; its English is ninety, and there are
-   17,969,808 of them. The grammar has three parts -- the basic play, then any
+   18,263,689 of them. The grammar has three parts -- the basic play, then any
    number of "/" modifiers, then the runners' advances after a full stop --
    and is specified at https://www.retrosheet.org/eventfile.htm.
 
@@ -1499,17 +1500,28 @@ async function viewAbout() {
       games, ${META.firstSeason}–${META.lastSeason};
       ${META.withBox.toLocaleString()} of them with a full box score and
       ${META.withPlays.toLocaleString()} with play-by-play.</p>
-    <p class="note"><strong>The play-by-play is not shown here yet.</strong> Where a
-      game is marked <span class="pill quiet">plays</span>, Retrosheet holds a
-      pitch-by-pitch account of it — 18 million plays in all — but this app reads
-      the game and box-score layers only. The badge says what exists, not what
-      you can open.</p>
+    <p class="note"><strong>Every play, where Retrosheet recorded one.</strong>
+      A game marked <span class="pill quiet">plays</span> carries an account of
+      each plate appearance — 18,263,689 of them — and its page will read them
+      out: “S8/L.2-H” becomes “Single to center field. Runner on second
+      scored.” The shorthand stays beside the English, because it is what
+      Retrosheet actually wrote, and where the expansion has nothing to say it
+      is all there is.</p>
+    <p class="note">Two things the plays don't carry here. Pitch sequences —
+      ball, called strike, foul, in play — are in the files from 1988 but are
+      not read in: they are two fifths of the bytes, and record the shape of a
+      plate appearance rather than its result. And a substitution is written as
+      a placeholder event, with the man coming in named in a record this build
+      doesn't load, so those rows read “No play”.</p>
 
     <h3>What the data can and can't say</h3>
     <p class="note">Game results go back to 1871, but the nineteenth-century game
-      logs carry only the result — no batting lines at all before 1898. Per-player
-      box scores are complete for the American and National Leagues from 1898.
-      The Federal League of 1914–15 has box scores but no play-by-play.
+      logs carry only the result — no batting lines at all before 1897. Per-player
+      box scores are complete for the National League from 1897 and for both
+      leagues from the American League's first season in 1901. The play-by-play
+      starts later: complete for the American and National Leagues from 1908,
+      and before that only 33 scattered games back to 1900. The Federal League
+      of 1914–15 has box scores but no play-by-play.
       Negro League games are not in the game logs at all; their records here are
       built from the box-score files, and Retrosheet notes that most were deduced
       from newspaper accounts.</p>
@@ -1517,12 +1529,10 @@ async function viewAbout() {
       on this site is summed from the individual game lines, so where Retrosheet's
       box scores differ from the official record — and Retrosheet documents that
       they sometimes do — the totals here will differ too. That is a property of
-      the source, not an error in the arithmetic.</p>
-
-    <h3>Licence</h3>
-    <p class="note">The information used here was obtained free of charge from and
-      is copyrighted by Retrosheet. Interested parties may contact Retrosheet at
-      <a href="https://www.retrosheet.org">www.retrosheet.org</a>.</p>`;
+      the source, not an error in the arithmetic.</p>`;
+  /* No licence section here. Retrosheet's notice is in the footer of
+     index.html, which is outside #app and so stands under every view,
+     including this one -- repeating it in the page body showed it twice. */
 }
 
 // --------------------------------------------------------------------- boot

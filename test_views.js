@@ -244,7 +244,11 @@ async function main() {
     ['teams — 1927', () => V.viewTeams([], Q({ season: 1927 })), h => h.includes('Clubs in 1927')],
     ['park — Yankee Stadium', () => V.viewPark(['NYC16']), h => h.includes('Games')],
     ['search — ruth', () => V.viewSearch([], Q({ q: 'ruth' })), h => h.includes('Babe Ruth')],
-    ['about', () => V.viewAbout(), h => h.includes('Retrosheet')],
+    /* The About page says what the data can and can't say. What it must not
+       say is the licence notice: index.html's footer stands under every view,
+       so a copy in the body showed it twice on this one page. */
+    ['about', () => V.viewAbout(),
+      h => h.includes('Retrosheet') && !h.includes('obtained free of charge')],
   ];
 
   for (const [label, run, assert] of cases) {
@@ -263,6 +267,12 @@ async function main() {
       check(label, false, String(e) + (e.stack ? '\n        ' + e.stack.split('\n')[0] : ''));
     }
   }
+
+  /* The other half of that: dropping the notice from the view is only right
+     while the footer still carries it. Retrosheet asks that it be displayed,
+     so once is required and twice is the bug. */
+  check('about — the licence notice is in the footer, exactly once',
+    (readFile('static/index.html').match(/obtained free of charge/g) || []).length === 1);
 
   // --- the day view is a redirect now, so it renders nothing to assert on
   location.hash = '#/day/1956-10-08';
