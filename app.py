@@ -902,8 +902,8 @@ def api_notable(conn):
     for chunk in ([*ids][i:i + 400] for i in range(0, len(ids), 400)):
         for g in rows(conn.execute(
                 "SELECT id, date, season, gametype, vis, home, vis_score, "
-                "home_score, vis_lg, home_lg FROM game WHERE id IN (%s)"
-                % ",".join("?" * len(chunk)), chunk)):
+                "home_score, vis_lg, home_lg, has_box, number FROM game "
+                "WHERE id IN (%s)" % ",".join("?" * len(chunk)), chunk)):
             games[g["id"]] = g
     tnames = team_map(conn, [(g[k], g["season"]) for g in games.values()
                              for k in ("vis", "home")])
@@ -932,6 +932,10 @@ def api_notable(conn):
             r.update({
                 "date": g["date"], "season": g["season"],
                 "gametype": g["gametype"],
+                # What the box pill is drawn from, the same as every other
+                # table that lists games: whether there is a box score behind
+                # the row, and which half of a doubleheader it was.
+                "has_box": g["has_box"], "number": g["number"],
                 "team": team, "teamName": tnames.get((team, g["season"]), team),
                 "opp": opp, "oppName": tnames.get((opp, g["season"]), opp),
                 "league": g["home_lg"] if side else g["vis_lg"],

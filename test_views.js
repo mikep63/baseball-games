@@ -249,7 +249,11 @@ async function main() {
       h => h.indexOf('Game log') < h.indexOf('Batting')
         && h.includes('id="gl-season"')],
     ['team — 1927 Yankees', () => V.viewTeam(['NYA'], Q({ season: 1927 })),
-      h => h.includes('Schedule') && h.includes('Roster') && h.includes('110')],
+      h => h.includes('Schedule') && h.includes('Roster') && h.includes('110')
+        // The schedule reaches a game the same way every other table does.
+        && h.includes('class="pill" href="#/game/NYA192704120"')
+        && h.includes('<td class="l">April 12, 1927</td>')
+        && !h.includes('>April 12, 1927</a>')],
     ['team — season list', () => V.viewTeam(['NYA'], Q({})), h => h.includes('Season')],
     ['teams — 1927', () => V.viewTeams([], Q({ season: 1927 })), h => h.includes('Clubs in 1927')],
     ['park — Yankee Stadium', () => V.viewPark(['NYC16']), h => h.includes('Games')],
@@ -259,7 +263,9 @@ async function main() {
        games and it has to be a link. */
     ['notable — defaults to the no-hitters', () => V.viewNotable([], Q({})),
       h => h.includes('Games worth reading') && h.includes('id="n-kind"')
-        && h.includes('#/game/')],
+        // Through the pill, and with the date left as data, like everywhere else.
+        && h.includes('class="pill" href="#/game/')
+        && !/>[A-Z][a-z]+ \d+, \d{4}<\/a>/.test(h)],
     ['notable — the perfect games are Larsen and 22 others',
       () => V.viewNotable([], Q({ kind: 'perfect' })),
       h => h.includes('Don Larsen') && h.includes('#/game/NYA195610080')

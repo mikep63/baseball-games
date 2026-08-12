@@ -179,7 +179,8 @@ async function main() {
      perfect games, where the play-by-play check does its work. */
   compare('/notable', await API.get('/notable'), fixture('notable'),
     ['kinds.0.id', 'kinds.0.n', 'kinds.1.id', 'kinds.1.n', 'kinds.2.n', 'kinds.3.n',
-     ...rowPaths('rows.perfect', 3, ['game', 'date', 'source', 'who.0.name']),
+     ...rowPaths('rows.perfect', 3, ['game', 'date', 'source', 'who.0.name',
+                                     'has_box', 'number']),
      ...rowPaths('rows.nohit', 6, ['game', 'date', 'team', 'source']),
      ...rowPaths('rows.cycle', 4, ['game', 'who.0.name']),
      ...rowPaths('rows.fourhr', 4, ['game', 'who.0.name', 'teamName'])]);

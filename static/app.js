@@ -98,7 +98,9 @@ const link = (href, text) => `<a href="${href}">${esc(text)}</a>`;
 const playerLink = (id, name) => id ? link('#/player/' + id, name || id) : esc(name || '');
 const teamLink = (code, season, name) =>
   code ? link(`#/team/${code}?season=${season}`, name || code) : '';
-const gameLink = (id, text) => link('#/game/' + id, text);
+// No gameLink here any more: nothing wraps arbitrary text in a link to a game.
+// Every table that lists games reaches one through the box pill, so that the
+// thing you click says whether there is a box score behind it.
 
 // ------------------------------------------------------------------- routing
 
@@ -270,6 +272,15 @@ const boxLinkHTML = (g, suffix) => {
   return `<a class="pill${has ? '' : ' quiet'}" href="#/game/${g.id}" title="${
     esc(title)}">${has ? 'box' : 'game'}${esc(suffix || '')}</a>`;
 };
+
+/* The same pill, for a table that carries a date of its own. Nowhere in this
+   app does a date open one game: in the games tab a date picks the day, and
+   everywhere else it is data with the pill beside it doing the opening. The
+   doubleheader number rides on the pill for that reason -- with the date not a
+   link, "box 1" and "box 2" are the only thing telling two rows of one date
+   apart. */
+const boxPillHTML = g => boxLinkHTML(g, g.number && String(g.number) !== '0'
+  ? ' ' + g.number : '');
 
 // What else Retrosheet holds, not something to click in itself: the play-by-play
 // is on file for 207,450 games, and the box link beside this one opens it.
@@ -1294,19 +1305,11 @@ async function viewPlayerGames(id, q) {
    empty IP and ER columns, and a two-way player -- Ruth in 1918, Ohtani now --
    gets both, each with the stats that belong to it, rather than one wide row
    half of which is blank. */
-/* The way out of a log row is the box pill, as it is in the games tab, and the
-   date beside it is data. A date that was a link read as though it would list
-   that day -- which is what a date does one tab over -- when it went to the one
-   game. The pill says what it opens and says whether there is a box score to
-   open, which the date could never do. The doubleheader number rides on it for
-   the same reason it does there: two rows of one date need telling apart. */
-const logGameLink = g => boxLinkHTML(g, g.number && g.number !== '0'
-  ? ' ' + g.number : '');
 const LOG_DATE = { t: 'Box', l: 1 };
 
 function renderGameLog(d, season) {
   const common = g => [
-    logGameLink(g),
+    boxPillHTML(g),
     niceDate(g.date),
     esc(g.teamName || g.team),
     (g.side === 0 ? 'at ' : 'vs ') + esc(g.oppName),
@@ -1344,7 +1347,7 @@ function renderGameLog(d, season) {
     if (play) parts.push((roles > 1 ? '<h5>Playing</h5>' : '') + play);
     if (b.mgr.length) {
       const rows = b.mgr.map(g => ({ cells: [
-        logGameLink(g),
+        boxPillHTML(g),
         niceDate(g.date),
         esc(g.teamName || g.team),
         (g.side === 0 ? 'at ' : 'vs ') + esc(g.oppName),
@@ -1360,7 +1363,7 @@ function renderGameLog(d, season) {
     }
     if (b.ump.length) {
       const rows = b.ump.map(g => ({ cells: [
-        logGameLink(g),
+        boxPillHTML(g),
         niceDate(g.date),
         `${esc(g.visName)} at ${esc(g.homeName)}`,
         `${n(g.vis_score)}–${n(g.home_score)}`,
@@ -1451,7 +1454,8 @@ async function viewTeam(parts, q) {
   const info = d.info || {};
   const rows = d.games.map(g => ({
     cells: [
-      gameLink(g.id, niceDate(g.date)),
+      boxPillHTML(g),
+      niceDate(g.date),
       g.atHome ? 'vs' : 'at',
       teamLink(g.opp, season, g.oppName),
       `${n(g.us)}–${n(g.them)}`,
@@ -1472,8 +1476,9 @@ async function viewTeam(parts, q) {
     <p class="note">${recs}</p>
     <div class="two-col">
       <div><h3>Schedule</h3>${table(
-        [{ t: 'Date', l: 1 }, { t: '', l: 1 }, { t: 'Opponent', l: 1 }, { t: 'Score' },
-         { t: '' }, { t: 'Record', l: 1 }, { t: 'Att' }], rows)}</div>
+        [{ t: 'Box', l: 1 }, { t: 'Date', l: 1 }, { t: '', l: 1 },
+         { t: 'Opponent', l: 1 }, { t: 'Score' }, { t: '' },
+         { t: 'Record', l: 1 }, { t: 'Att' }], rows)}</div>
       <div><h3>Roster (${d.roster.length})</h3>${table(
         [{ t: 'Player', l: 1 }, { t: 'Pos', l: 1 }, { t: 'B/T', l: 1 }], roster)}</div>
     </div>`;
@@ -1545,7 +1550,10 @@ async function viewNotable(_, q) {
     const weak = r.source === 'log' || (kind === 'perfect' && r.source === 'box');
     const [label, why] = NOTABLE_SOURCE[r.source] || ['', ''];
     return { cells: [
-      gameLink(r.game, niceDate(r.date)),
+      // The row's own id field is `game`, not `id`, which is what the pill
+      // reads -- so it is handed the shape every other table hands it.
+      boxPillHTML({ id: r.game, has_box: r.has_box, number: r.number }),
+      niceDate(r.date),
       r.who.length ? r.who.map(w => playerLink(w.id, w.name)).join(', ')
         : '<span class="note">not recorded</span>',
       teamLink(r.team, r.season, r.teamName)
@@ -1566,9 +1574,9 @@ async function viewNotable(_, q) {
       does. Box scores start in 1897: Bobby Lowe's four home runs in 1894 and
       the two perfect games of 1880 cannot appear. The Federal League of
       1914–15 has no box scores at all, and the Negro Leagues are in.</p>
-    ${table([{ t: 'Date', l: 1 }, { t: meta.id === 'nohit' || meta.id === 'perfect'
-        ? 'Pitcher' : 'Batter', l: 1 }, { t: 'Club', l: 1 },
-      { t: 'Against', l: 1 }, { t: 'Score' }], rows,
+    ${table([{ t: 'Box', l: 1 }, { t: 'Date', l: 1 },
+      { t: meta.id === 'nohit' || meta.id === 'perfect' ? 'Pitcher' : 'Batter', l: 1 },
+      { t: 'Club', l: 1 }, { t: 'Against', l: 1 }, { t: 'Score' }], rows,
       { empty: 'Nothing of this kind in the data.' })}`;
 
   document.getElementById('n-kind').addEventListener('change', e => {
