@@ -126,6 +126,20 @@ CREATE TABLE box_event(
   game TEXT, kind TEXT, side INT, players TEXT,
   inning INT, runners_on INT, outs INT);
 
+-- The play-by-play, one row per plate appearance or baserunning event, in the
+-- order the file lists them. `event` is Retrosheet's own shorthand -- "63/G6",
+-- "HR/F9D+" -- which is the compact form and the one worth storing; expanding
+-- it into English is a pure function of the string and belongs at the point
+-- of reading, not here.
+--
+-- The pitch sequence is deliberately not kept. It records what happened to
+-- each pitch (ball, called strike, foul, in play) and never what was thrown --
+-- Retrosheet has no pitch types, velocities or locations at all -- so it is
+-- two fifths of the bytes for the shape of a plate appearance, not its result.
+CREATE TABLE play(
+  game TEXT, seq INT, inning INT, side INT, batter TEXT,
+  count TEXT, event TEXT);
+
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 """ % ",\n  ".join("%s_%s INT" % (s, c) for s in ("v", "h") for c in TEAM_STATS)
 
@@ -149,6 +163,7 @@ CREATE INDEX ix_ph_game      ON pinch_hit(game);
 CREATE INDEX ix_ph_person    ON pinch_hit(person);
 CREATE INDEX ix_tbox_game    ON team_box(game);
 CREATE INDEX ix_bev_game     ON box_event(game);
+CREATE INDEX ix_play_game    ON play(game);
 CREATE INDEX ix_roster_team  ON roster(team, season);
 CREATE INDEX ix_roster_person ON roster(person);
 """
@@ -629,20 +644,45 @@ def _synth_header(gid, info, lines):
 
 
 def mark_coverage(conn, box_ids):
-    """Flag which games have a box score and which have play-by-play."""
-    pbp = set()
+    """Flag which games have a box score and which have play-by-play, and read
+    the plays while the files are open.
+
+    One pass over 900 MB rather than two. The pitch sequence -- field 5 -- is
+    read past: it records what happened to each pitch and never what was
+    thrown, so it is 40% of the bytes for the shape of a plate appearance
+    rather than its outcome.
+    """
+    pbp, plays, gid, seq = set(), [], None, 0
     for pattern in ("events/*.EV[AN]", "events/*.ED[AN]",
                     "postseason/*.EVE", "allstar/*.EVE", "ngl_e/*.EVR"):
-        for path in glob.glob(rel(pattern)):
+        for path in sorted(glob.glob(rel(pattern))):
             with open(path, encoding="latin-1", errors="replace") as f:
                 for line in f:
                     if line.startswith("id,"):
-                        pbp.add(line.strip().split(",")[1])
+                        gid = line.strip().split(",")[1]
+                        pbp.add(gid)
+                        seq = 0
+                    elif line.startswith("play,") and gid:
+                        p = line.rstrip("\n").split(",")
+                        if len(p) < 7:
+                            continue
+                        seq += 1
+                        # "??" is what a game before 1988 carries for the count.
+                        cnt = p[4] if p[4] not in ("??", "") else None
+                        plays.append((gid, seq, num(p[1]), num(p[2]), p[3],
+                                      cnt, p[6].strip()))
+            if len(plays) > 400000:
+                conn.executemany("INSERT INTO play VALUES(?,?,?,?,?,?,?)", plays)
+                plays = []
+    if plays:
+        conn.executemany("INSERT INTO play VALUES(?,?,?,?,?,?,?)", plays)
     conn.executemany("UPDATE game SET has_box = 1 WHERE id = ?",
                      [(g,) for g in box_ids])
     conn.executemany("UPDATE game SET has_pbp = 1 WHERE id = ?", [(g,) for g in pbp])
     say("with box score", len(box_ids))
     say("with play-by-play", len(pbp))
+    say("play", conn.execute("SELECT COUNT(*) FROM play").fetchone()[0],
+        "Retrosheet's own shorthand; expanded at the point of reading")
     return pbp
 
 

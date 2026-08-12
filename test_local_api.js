@@ -16,6 +16,12 @@ let failures = 0, checks = 0;
 // ------------------------------------------------------- browser stand-ins
 
 globalThis.window = {};
+/* jsc has no DecompressionStream, so api-local's inflate path cannot run here.
+   The shards the test reads are inflated by test_views.sh instead, and this
+   stands in for the streaming API over the already-plain bytes. */
+globalThis.DecompressionStream = function () { this.plain = true; };
+globalThis.Response = function (body) { this._b = body; };
+globalThis.Response.prototype.text = async function () { return this._b; };
 globalThis.URLSearchParams = class {
   constructor(init) {
     this.m = new Map();
@@ -33,10 +39,16 @@ globalThis.URLSearchParams = class {
 
 // fetch('data/...') reads the real export off disk
 globalThis.fetch = async function (url) {
-  const path = 'docs/' + url;
+  // The play shards are gzipped in docs/; test_views.sh inflates the ones this
+  // reads into .plays-inflated first, because jsc cannot.
+  const m = url.match(/^data\/plays\/(.+)\.json\.gz$/);
+  const path = m ? '.plays-inflated/' + m[1] + '.json' : 'docs/' + url;
   try {
     const body = readFile(path);
-    return { ok: true, json: async () => JSON.parse(body) };
+    // `body` here stands in for the response stream api-local pipes through
+    // DecompressionStream; inflated already, the pipe is the identity.
+    return { ok: true, json: async () => JSON.parse(body),
+             body: { pipeThrough: () => body } };
   } catch (e) {
     return { ok: false, json: async () => { throw new Error('missing ' + path); } };
   }
@@ -134,6 +146,19 @@ async function main() {
     await API.get('/teams?season=1933&league=NN2'),
     fixture('teams_season_1933_league_NN2'),
     rowPaths('teams', 8, ['id', 'league', 'city', 'nickname', 'n']));
+
+  /* The play-by-play. app.py reads it from SQLite, api-local from a gzipped
+     shard it inflates -- two entirely different paths to the same 57 plays. */
+  compare('/game/NYA195610080/plays',
+    await API.get('/game/NYA195610080/plays'),
+    fixture('game_NYA195610080_plays'),
+    ['total', ...rowPaths('plays', 20, ['seq', 'inning', 'side', 'batter',
+                                        'batterName', 'count', 'event'])]);
+  compare('/game/LAN198610050/plays',
+    await API.get('/game/LAN198610050/plays'),
+    fixture('game_LAN198610050_plays'),
+    ['total', ...rowPaths('plays', 12, ['seq', 'inning', 'side', 'batter',
+                                        'event'])]);
 
   // --- a career: every season row and the fielding breakdown
   compare('/player/ruthb101', await API.get('/player/ruthb101'), fixture('player_ruthb101'),

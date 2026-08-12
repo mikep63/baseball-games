@@ -29,7 +29,7 @@ respectively, both entirely derived, both one command away.
 | | |
 |---|---|
 | **Games** | every game, filterable by season, league, club, park, date and type |
-| **Game** | line score, both box scores, itemised HR/SB/CS/DP/HBP, umpires, weather, attendance |
+| **Game** | line score, both box scores, itemised HR/SB/CS/DP/HBP, umpires, weather, attendance, and every play |
 | **Player** | bio, season-by-season batting/pitching/fielding/managing/umpiring — one table per kind of game — and every game he took part in |
 | **Team** | a club's season: schedule, running record, roster |
 | **Park** | where it was, what was played there, attendance by season |
@@ -53,9 +53,19 @@ looking at 1927 downloads one 1.6 MB file, not the corpus. Careers are sharded
 on the player's initial for the same reason: one file is 18 MB and every player
 page would pay for it.
 
-`docs/` is about 455 MB and **is committed**, which is the cost of serverless
+`docs/` is about 630 MB and **is committed**, which is the cost of serverless
 hosting. Most shards are byte-identical between releases, so the yearly growth
 is the seasons that actually changed rather than another full copy.
+
+The play-by-play is the one thing written compressed. **GitHub Pages caps a
+published site at 1 GB**, and 18.3 million plays are 505 MB of plain JSON
+against a `docs/` already at 495; gzipped they are 105 MB across 2,982 shards,
+one per club per season, the largest 55 KB. It buys nothing on download —
+Pages serves everything gzipped in transit anyway — and everything on fitting.
+The cost is that reading them needs `DecompressionStream`, so a browser older
+than Safari 16.4, Firefox 113 or Chrome 80 is told so and shown the rest of the
+page; and that `test_views.sh` inflates the shards the parity test reads,
+because JavaScriptCore has no `DecompressionStream` either.
 
 ## Layout
 
@@ -82,7 +92,17 @@ Worth knowing before trusting a number:
   Federal League of 1914–15 has box scores but no play-by-play, which is the
   whole of the apparent gap in those years.
 - **Pitch sequences effectively start in 1988** (~88% of plays since; near zero
-  before).
+  before), and they are not kept here. They record what happened to each pitch
+  — ball, called strike, foul, in play — and never what was thrown: Retrosheet
+  has no pitch types, velocities or locations at all. That is two fifths of the
+  play-by-play bytes for the shape of a plate appearance rather than its
+  result, so `build_db.py` reads past them.
+- **The play-by-play is stored in Retrosheet's shorthand and expanded where it
+  is read.** "S8/L.2-H" is eight bytes; its English is ninety, and there are
+  18,263,689 of them. Expanding is a pure function of the string, so nothing
+  expanded is ever stored — `describePlay` in `app.js` does it at the moment of
+  reading. It handles 100% of a 232,535-play sample, and anything it does not
+  recognise is shown as shorthand rather than as a confidently wrong sentence.
 - **Negro League games are not in the game logs at all.** Their headers here are
   synthesised from the box-score files, and Retrosheet notes most were deduced
   from newspaper accounts.

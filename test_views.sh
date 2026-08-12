@@ -47,6 +47,8 @@ for u in \
   "games?season=1927&limit=400&date=1927-07-04" \
   "game/NYA195610080" \
   "game/LAN198610050" \
+  "game/NYA195610080/plays" \
+  "game/LAN198610050/plays" \
   "player/ruthb101" \
   "player/ruthb101/games?season=1927" \
   "player/gibsj101" \
@@ -71,7 +73,17 @@ echo "Recorded $(ls fixtures/*.json | wc -l | tr -d ' ') fixtures"
 # stops it drifting from app.py, so run it whenever the exports exist.
 if [ -d docs/data ]; then
   echo
+  # The play shards are gzipped so the site fits inside the 1 GB GitHub Pages
+  # allows. JavaScriptCore has no DecompressionStream -- no fetch, Response or
+  # TextDecoder either -- so the shell inflates the handful the test reads and
+  # the harness serves those. The alternative was vendoring an inflate into a
+  # project that has no dependencies and no build step.
+  rm -rf .plays-inflated && mkdir -p .plays-inflated
+  for f in docs/data/plays/NYA1956.json.gz docs/data/plays/LAN1986.json.gz; do
+    [ -f "$f" ] && gunzip -c "$f" > ".plays-inflated/$(basename "$f" .gz)"
+  done
   "$JSC" test_local_api.js
+  rm -rf .plays-inflated
 else
   echo
   echo "docs/ not built — skipping the local-API agreement check."

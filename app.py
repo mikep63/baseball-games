@@ -632,6 +632,23 @@ def api_player_games(pid, q, conn):
             "total": len(gs) + len(managed) + len(umpired)}
 
 
+def api_game_plays(gid, conn):
+    """The play-by-play, in Retrosheet's shorthand and nobody else's.
+
+    The event string is the compact form -- "S8/L.2-H" against ninety
+    characters of English -- and expanding it is a pure function of the string,
+    so it happens where it is read rather than here. 18,263,689 of these are
+    stored; not one expanded sentence is.
+    """
+    plays = rows(conn.execute(
+        "SELECT seq, inning, side, batter, count, event FROM play "
+        "WHERE game = ? ORDER BY seq", (gid,)))
+    names = people_map(conn, [p["batter"] for p in plays])
+    for p in plays:
+        p["batterName"] = names.get(p["batter"], p["batter"])
+    return {"game": gid, "plays": plays, "total": len(plays)}
+
+
 def api_team(code, q, conn):
     """A club's season: every game in order, with a running record."""
     season = intarg(q, "season")
@@ -771,6 +788,9 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if path in ROUTES:
                 return self.send_json(ROUTES[path](q, conn))
+            m = re.match(r"^/api/game/([A-Z0-9]+)/plays$", path)
+            if m:
+                return self.send_json(api_game_plays(m.group(1), conn))
             m = re.match(r"^/api/game/([A-Z0-9]+)$", path)
             if m:
                 return self.send_json(api_game(m.group(1), conn))

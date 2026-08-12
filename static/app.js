@@ -790,7 +790,192 @@ async function viewGame(parts) {
       pitchingTable(s.pit, decisions)}`).join('')}
     ${boxSummaryHTML(d.batting, d.pitching, d.events, d.teamBox,
                      [g.visName, g.homeName])}
+    ${g.has_pbp ? `<h3>Play by play</h3>${playsCanBeRead()
+      ? `<p class="note"><button id="pbp-open" class="pill">Show every play</button></p>
+         <div id="pbp"></div>`
+      /* The shards are gzipped to fit inside the 1 GB a GitHub Pages site is
+         allowed, so reading them needs DecompressionStream. Saying so beats a
+         button that fails, and the rest of the page is unaffected. */
+      : `<p class="empty">Your browser can't read the play-by-play files —
+         they are compressed, and this needs DecompressionStream (Safari 16.4,
+         Firefox 113 or Chrome 80 and later). Everything else on this page
+         works.</p>`}` : ''}
     ${gameInfoHTML(g, d.park, p, d.pitching)}`;
+
+  /* Built when asked for, not before. The plays are Retrosheet's shorthand
+     and expanding them is a pure function of the string, so there is nothing
+     to precompute and nothing to store -- the page fetches the game's own
+     plays and turns them into English at the moment of reading. */
+  const open = document.getElementById('pbp-open');
+  if (open) open.addEventListener('click', async () => {
+    const box = document.getElementById('pbp');
+    open.disabled = true;
+    box.innerHTML = '<p class="note">Reading the play-by-play…</p>';
+    try {
+      const pbp = await api(`/game/${g.id}/plays`);
+      box.innerHTML = playsHTML(pbp.plays, [g.visName, g.homeName]);
+      open.closest('p').remove();
+    } catch (e) {
+      box.innerHTML = '<p class="empty">Could not read the play-by-play.</p>';
+      open.disabled = false;
+    }
+  });
+}
+
+// ------------------------------------------------------------- play-by-play
+
+/* Retrosheet's event notation, expanded where it is read rather than stored
+   expanded. "S8/L.2-H" is eight bytes; its English is ninety, and there are
+   17,969,808 of them. The grammar has three parts -- the basic play, then any
+   number of "/" modifiers, then the runners' advances after a full stop --
+   and is specified at https://www.retrosheet.org/eventfile.htm.
+
+   This covers the concentrated head of it. 2019's 222,047 plays use 11,914
+   distinct event strings but only 255 distinct shapes, and K, NP, W, HR and
+   the plain fielder outs are most of them. Anything unrecognised is shown
+   verbatim, so a gap reads as shorthand on the page rather than as a
+   confidently wrong sentence. */
+
+const FIELDER = { 1: 'pitcher', 2: 'catcher', 3: 'first baseman',
+  4: 'second baseman', 5: 'third baseman', 6: 'shortstop', 7: 'left fielder',
+  8: 'center fielder', 9: 'right fielder' };
+
+const HIT_TO = { 1: 'the pitcher', 2: 'the catcher', 3: 'first base',
+  4: 'second base', 5: 'third base', 6: 'shortstop', 7: 'left field',
+  8: 'center field', 9: 'right field' };
+
+const TRAJECTORY = { G: 'ground ball', L: 'line drive', F: 'fly ball',
+  P: 'pop up', BG: 'bunt', BP: 'bunt pop up', BL: 'bunt line drive' };
+
+const BASE_NAME = { 1: 'first', 2: 'second', 3: 'third', H: 'home', B: 'the batter' };
+
+const fielders = s => [...String(s)].map(d => FIELDER[+d]).filter(Boolean);
+
+/* The basic play. Order matters: POCS before PO, HP before H, IW before W,
+   DGR before D -- each longer code would otherwise be eaten by its prefix. */
+function describeBasic(play, mods) {
+  const traj = mods.map(m => (m.match(/^(BG|BP|BL|G|L|F|P)(?![A-Z])/) || [])[1])
+    .find(Boolean);
+  const shape = TRAJECTORY[traj];
+  const dp = mods.some(m => /^(GDP|LDP|FDP|BGDP|BPDP|DP)$/.test(m));
+  const tp = mods.some(m => /^(GTP|LTP|TP)$/.test(m));
+  const sf = mods.includes('SF'), sh = mods.includes('SH');
+  let m;
+
+  /* The running plays and the battery's mistakes come first. They begin with
+     letters the hits also begin with -- SB2 would otherwise read as a single,
+     WP as a walk -- so precedence is doing real work here, not tidiness. */
+  if (/^(SB|CS|POCS|PO)[123H]/.test(play)) {
+    return play.split(';').map(one => {
+      const q = one.match(/^(POCS|CS|SB|PO)([123H])/);
+      if (!q) return one;
+      const base = BASE_NAME[q[2] === 'H' ? 'H' : +q[2]];
+      return { SB: 'Stole ', CS: 'Caught stealing ', PO: 'Picked off ',
+               POCS: 'Picked off and caught stealing ' }[q[1]] + base;
+    }).join(', ');
+  }
+  if (play.startsWith('WP')) return 'Wild pitch';
+  if (play.startsWith('PB')) return 'Passed ball';
+  if (play.startsWith('BK')) return 'Balk';
+  if (play.startsWith('DI')) return 'Defensive indifference';
+  if (play.startsWith('NP')) return 'No play';
+  if (play.startsWith('OA')) return 'Runner advanced';
+  if (play.startsWith('HP')) return 'Hit by pitch';
+
+  // A ball two men handled is written with both -- S67, S49 -- and the first
+  // is the one who fielded it.
+  if ((m = play.match(/^([SDT])(\d*)(?![A-Z])/)) && !play.startsWith('DGR')) {
+    const kind = { S: 'Single', D: 'Double', T: 'Triple' }[m[1]];
+    return kind + (m[2] ? ' to ' + HIT_TO[+m[2][0]] : '');
+  }
+  if (play.startsWith('DGR')) return 'Ground-rule double';
+  if ((m = play.match(/^HR?(\d*)/)) && !play.startsWith('HP')) {
+    return 'Home run' + (m[1] ? ' to ' + HIT_TO[+m[1][0]] : '');
+  }
+  if (play.startsWith('HP')) return 'Hit by pitch';
+  if (play.startsWith('K')) {
+    return 'Strikeout' + (mods.includes('C') ? ' looking' : '');
+  }
+  if (/^IW?$/.test(play) || play.startsWith('IW')) return 'Intentional walk';
+  if (play.startsWith('W')) return 'Walk';
+  if ((m = play.match(/^FLE(\d)/))) return 'Error on a foul fly by the ' + FIELDER[+m[1]];
+  if ((m = play.match(/^E(\d)/))) return 'Reached on an error by the ' + FIELDER[+m[1]];
+  if ((m = play.match(/^FC(\d)?/))) {
+    return "Fielder's choice" + (m[1] ? ', ' + FIELDER[+m[1]] : '');
+  }
+  if (/^C$/.test(play)) return "Catcher's interference";
+  // "64(1)3" is 6 to 4 to 3; the (1) says which runner was put out, and
+  // stripping it is what keeps the third fielder in the sequence.
+  if ((m = play.replace(/\([^)]*\)/g, '').match(/^(\d+)/))) {
+    const who = fielders(m[1]);
+    const out = tp ? 'Triple play' : dp ? 'Double play'
+      : sf ? 'Sacrifice fly' : sh ? 'Sacrifice bunt'
+      : shape ? shape.charAt(0).toUpperCase() + shape.slice(1) + ' out' : 'Out';
+    return who.length > 1 ? `${out}, ${who.join(' to ')}`
+      : `${out}${who.length ? ' to the ' + who[0] : ''}`;
+  }
+  return null;   // unrecognised: the caller shows the shorthand instead
+}
+
+/* "2-H;1-3" -- the runner on second scored, the runner on first reached
+   third. An X in place of the dash is an out. The parenthesised fielders are
+   dropped: they are the put-out credit, which the box score already carries. */
+function describeAdvances(adv) {
+  if (!adv) return [];
+  return adv.split(';').map(a => {
+    const m = a.replace(/\([^)]*\)/g, '').match(/^([123BH])([-X])([123BH])$/);
+    if (!m) return null;
+    const from = BASE_NAME[m[1] === 'H' || m[1] === 'B' ? m[1] : +m[1]];
+    const to = BASE_NAME[m[3] === 'H' || m[3] === 'B' ? m[3] : +m[3]];
+    const who = m[1] === 'B' ? 'Batter' : 'Runner on ' + from;
+    if (m[2] === 'X') return `${who} out at ${to}`;
+    if (m[3] === 'H') return `${who} scored`;
+    if (m[1] === m[3]) return null;   // "3-3" is an explicit lack of advance
+    return `${who} to ${to}`;
+  }).filter(Boolean);
+}
+
+/* The whole event, as a sentence and the shorthand it came from. */
+function describePlay(ev) {
+  if (!ev) return { text: '', raw: ev, known: false };
+  // ! ? # mark an exceptional or uncertain play; + and - a hard or softly hit
+  // ball. The specification says all five can be safely ignored.
+  const clean = ev.replace(/[!?#]/g, '');
+  const dot = clean.indexOf('.');
+  const head = (dot < 0 ? clean : clean.slice(0, dot)).replace(/[+\-]/g, '');
+  const parts = head.split('/');
+  const main = describeBasic(parts[0], parts.slice(1));
+  const runners = describeAdvances(dot < 0 ? '' : clean.slice(dot + 1));
+  if (!main) return { text: '', raw: ev, known: false };
+  return { text: [main, ...runners].join('. ') + '.', raw: ev, known: true };
+}
+
+/* One row per play, grouped by half-inning. The shorthand is kept beside the
+   English rather than thrown away: it is what Retrosheet actually recorded,
+   it is what anyone checking the page against the source needs, and where the
+   parser has nothing to say it is all there is. */
+/* Under app.py the plays arrive as plain JSON and any browser can read them;
+   only the docs/ build stores them compressed. */
+const playsCanBeRead = () => !window.LocalAPI || window.LocalAPI.canReadPlays;
+
+function playsHTML(plays, sides) {
+  if (!plays.length) return '<p class="empty">No plays recorded.</p>';
+  const out = [];
+  let half = null;
+  for (const p of plays) {
+    const key = p.inning + '|' + p.side;
+    if (key !== half) {
+      half = key;
+      out.push(`<h5>${p.side === 0 ? 'Top' : 'Bottom'} ${ordinal(p.inning)} — ${
+        esc(sides[p.side])}</h5>`);
+    }
+    const d = describePlay(p.event);
+    out.push(`<div class="play">${playerLink(p.batter, p.batterName)}
+      <span class="${d.known ? 'pbp-text' : 'pbp-text note'}">${
+        d.known ? esc(d.text) : 'Not yet translated'}</span>
+      <code class="pbp-raw">${esc(d.raw)}</code></div>`);
+  }
+  return out.join('');
 }
 
 // ------------------------------------------------------------------- player

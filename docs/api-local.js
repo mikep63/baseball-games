@@ -505,6 +505,39 @@ window.LocalAPI = (function () {
              records, roster };
   }
 
+  /* The play shards are stored gzipped, because GitHub Pages caps a published
+     site at 1 GB and 505 MB of plain JSON would not fit beside the rest. Pages
+     gzips in transit regardless, so this costs nothing on download -- but it
+     does mean the browser has to inflate, and DecompressionStream is the one
+     thing this frontend uses that an older browser may not have. */
+  const canInflate = typeof DecompressionStream === 'function';
+
+  const playShards = new Map();
+  async function playShard(key) {
+    if (!playShards.has(key)) {
+      playShards.set(key, (async () => {
+        const r = await fetch('data/plays/' + key + '.json.gz');
+        if (!r.ok) throw new Error('missing plays for ' + key);
+        const text = await new Response(
+          r.body.pipeThrough(new DecompressionStream('gzip'))).text();
+        return rows(JSON.parse(text), 'c', 'r');
+      })());
+    }
+    return playShards.get(key);
+  }
+
+  async function gamePlays(gid) {
+    if (!canInflate) throw new Error('no DecompressionStream');
+    const all = await playShard(gid.slice(0, 3) + gid.slice(3, 7));
+    const pe = (await people()).by;
+    const plays = all.filter(p => p.game === gid).map((p, i) => ({
+      seq: i + 1, inning: p.inning, side: p.side, batter: p.batter,
+      count: p.count, event: p.event,
+      batterName: nameOf(pe.get(p.batter)) || p.batter,
+    }));
+    return { game: gid, plays, total: plays.length };
+  }
+
   async function park(id) {
     const pk = await parks();
     const p = pk.by.get(id);
@@ -527,6 +560,8 @@ window.LocalAPI = (function () {
     if (p === '/meta') return meta();
     if (p === '/search') return search(q);
     if (p === '/games') return gamesList(q);
+    let mp = p.match(/^\/game\/([A-Z0-9]+)\/plays$/);
+    if (mp) return gamePlays(mp[1]);
     if (p === '/teams') return teamsList(q);
     if ((m = p.match(/^\/game\/([A-Z0-9]+)$/))) return game(m[1]);
     if ((m = p.match(/^\/player\/([a-z0-9]+)\/games$/))) return playerGames(m[1], q);
@@ -536,5 +571,7 @@ window.LocalAPI = (function () {
     throw new Error('unknown endpoint: ' + p);
   }
 
-  return { get };
+  // app.js asks before offering the play-by-play, so a browser that cannot
+  // inflate is told plainly rather than handed a button that fails.
+  return { get, canReadPlays: canInflate };
 })();

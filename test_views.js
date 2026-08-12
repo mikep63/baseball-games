@@ -78,7 +78,8 @@ function loadApp() {
   const body = src.slice(0, cut);
   return new Function(body + '\nreturn {viewGames, viewGame, viewPlayer, viewTeam, ' +
     'viewTeams, viewDay, viewPark, viewSearch, viewAbout, ' +
-    'weekdayOf, monthsBetween, dayBucket, gamesHash, setMeta: m => { META = m; }};')();
+    'weekdayOf, monthsBetween, dayBucket, gamesHash, describePlay, ' +
+    'setMeta: m => { META = m; }};')();
 }
 
 // tiny URLSearchParams stand-in for the query objects the router passes in
@@ -276,6 +277,36 @@ async function main() {
   await V.viewPlayer(['ruthb101'], Q({ season: 1927 }));
   check('player — the old ?season= address redirects to the log page',
     location.hash === '#/player/ruthb101/games?season=1927', location.hash);
+
+  /* Retrosheet's event notation, against plays from Larsen's perfect game and
+     the ordinary run of things. Expanding it is a pure function of the string,
+     so it is checked here directly rather than through a view. */
+  [['K/C', 'Strikeout looking.'],
+   ['K', 'Strikeout.'],
+   ['53/G5', 'Ground ball out, third baseman to first baseman.'],
+   ['9/L89', 'Line drive out to the right fielder.'],
+   ['HR/F9LD', 'Home run.'],
+   ['W', 'Walk.'],
+   ['IW', 'Intentional walk.'],
+   ['HP', 'Hit by pitch.'],
+   ['S8/L.2-H;1-3', 'Single to center field. Runner on second scored. Runner on first to third.'],
+   ['S67/G6+', 'Single to shortstop.'],
+   ['D7/L7L.2-H', 'Double to left field. Runner on second scored.'],
+   ['E6/G6', 'Reached on an error by the shortstop.'],
+   ['64(1)3/GDP', 'Double play, shortstop to second baseman to first baseman.'],
+   ['SB2', 'Stole second.'],
+   ['CS3(25)', 'Caught stealing third.'],
+   ['NP', 'No play.'],
+   ['WP.2-3', 'Wild pitch. Runner on second to third.'],
+  ].forEach(([ev, want]) => {
+    const got = V.describePlay(ev);
+    check('play — ' + ev, got.known && got.text === want,
+      got.known ? got.text : 'unparsed');
+  });
+  /* An event it has never seen must read as shorthand, not as a wrong
+     sentence: the fallback is the honest half of the parser. */
+  const odd = V.describePlay('ZZ9/QQ');
+  check('play — the unknown stays shorthand', !odd.known && odd.raw === 'ZZ9/QQ');
 
   /* Calendar arithmetic, checked against Retrosheet rather than against
      itself: game.dow is recorded per game in the database, and these are the

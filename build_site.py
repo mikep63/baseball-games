@@ -17,6 +17,7 @@ are precomputed into their own files instead.
 
 Usage: python3 build_site.py
 """
+import gzip
 import hashlib
 import json
 import os
@@ -48,6 +49,7 @@ DOCS = os.path.join(BASE, "docs")
 DATA = os.path.join(DOCS, "data")
 SEASONS = os.path.join(DATA, "season")
 CAREERS = os.path.join(DATA, "careers")
+PLAYS = os.path.join(DATA, "plays")
 
 # Only what a view actually renders. The game page shows batting, pitching and
 # the itemised events; it does not show fielding lines, pinch-running or team
@@ -234,6 +236,43 @@ def export_roles(conn):
         "ump": [list(r) for r in ump]})
     report("roles.json", path,
            "%s managing, %s umpiring rows" % (f"{len(mgr):,}", f"{len(ump):,}"))
+
+
+def export_plays(conn):
+    """The play-by-play, sharded the way Retrosheet shards it and gzipped.
+
+    Two decisions, both forced by numbers. The shard is one home club's season
+    -- Retrosheet's own unit, 2019BOS.EVA -- because a whole season is 6.5 MB
+    to show one game's ninety plays, where a club's season is 220 KB.
+
+    And it is written compressed because GitHub Pages caps a published site at
+    1 GB. Plain, these 18.3 million plays are 505 MB against a docs/ already
+    at 495; gzipped they are about 90. It buys nothing on download -- Pages
+    gzips in transit anyway -- and everything on fitting.
+    """
+    os.makedirs(PLAYS, exist_ok=True)
+    shards, biggest, total = {}, 0, 0
+    for gid, seq, inning, side, batter, count, event in conn.execute(
+            "SELECT game, seq, inning, side, batter, count, event FROM play "
+            "ORDER BY game, seq"):
+        shards.setdefault(gid[:3] + gid[3:7], []).append(
+            [gid, inning, side, batter, count, event])
+    for key, rows_ in shards.items():
+        path = os.path.join(PLAYS, key + ".json.gz")
+        blob = json.dumps({"c": ["game", "inning", "side", "batter", "count",
+                                 "event"], "r": rows_},
+                          separators=(",", ":")).encode("utf-8")
+        with gzip.open(path, "wb", compresslevel=9) as f:
+            f.write(blob)
+        size = os.path.getsize(path)
+        total += size
+        biggest = max(biggest, size)
+    global total_bytes
+    total_bytes += total
+    print("  %-22s %9.1f KB  %s"
+          % ("plays/ (%d shards)" % len(shards), biggest / 1024,
+             "largest; %.0f MB in all, %s plays"
+             % (total / 1048576, f"{sum(len(v) for v in shards.values()):,}")))
 
 
 def export_reference(conn):
@@ -438,6 +477,7 @@ def main():
     export_bio(conn)
     export_careers(conn)
     export_roles(conn)
+    export_plays(conn)
     export_reference(conn)
 
     print("Season shards")
