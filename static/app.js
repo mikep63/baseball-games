@@ -102,6 +102,59 @@ const teamLink = (code, season, name) =>
 // Every table that lists games reaches one through the box pill, so that the
 // thing you click says whether there is a box score behind it.
 
+/* ------------------------------------------------------------- favourites
+
+   The first thing this app stores rather than reads. Everything else on the
+   page is Retrosheet's and the same for every reader; this is the reader's,
+   and there is no server to keep it on -- the site is static files on Pages.
+   So it lives in localStorage, which means it is per browser: a list made on
+   a laptop is not the list on a phone, and the page says so rather than
+   letting anyone assume otherwise.
+
+   A label is stored beside the id. Keeping ids alone would be tidier and
+   would mean fetching 2.3 MB of names, or a season's games, to draw a list
+   of six rows. */
+const FAV_KEY = 'baseball-games:favorites';
+
+function favRead() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FAV_KEY));
+    return Array.isArray(raw) ? raw.filter(f => f && f.kind && f.id) : [];
+  } catch (e) {
+    return [];   // private browsing, no storage, or something else's key
+  }
+}
+
+function favWrite(list) {
+  try {
+    localStorage.setItem(FAV_KEY, JSON.stringify(list));
+    return true;
+  } catch (e) {
+    return false;   // a full or forbidden store; the star just won't stick
+  }
+}
+
+const favHas = (kind, id) => favRead().some(f => f.kind === kind && f.id === id);
+
+/* Newest first, because a list of favourites is a list of what you were just
+   looking at more often than it is an archive. Returns whether it is now on. */
+function favToggle(kind, id, label, sub) {
+  const list = favRead();
+  const at = list.findIndex(f => f.kind === kind && f.id === id);
+  if (at >= 0) list.splice(at, 1);
+  else list.unshift({ kind, id, label, sub: sub || '' });
+  favWrite(list);
+  return at < 0;
+}
+
+const favStar = (kind, id, label, sub) => {
+  const on = favHas(kind, id);
+  return `<button class="fav${on ? ' on' : ''}" data-fav="${esc(kind)}"
+    data-id="${esc(id)}" data-label="${esc(label)}" data-sub="${esc(sub || '')}"
+    aria-pressed="${on}" title="${on ? 'Remove from favourites'
+      : 'Keep this in favourites, in this browser'}">${on ? '★' : '☆'}</button>`;
+};
+
 // ------------------------------------------------------------------- routing
 
 function parseHash() {
@@ -117,6 +170,7 @@ const ROUTES = {
   team: viewTeam,
   teams: viewTeams,
   notable: viewNotable,
+  favorites: viewFavorites,
   day: viewDay,
   park: viewPark,
   search: viewSearch,
@@ -808,7 +862,8 @@ async function viewGame(parts) {
         &nbsp;at&nbsp;
         <span class="${g.home_score > g.vis_score ? 'win' : ''}">${esc(g.homeName)} ${n(g.home_score)}</span>
       </div>
-      <div>${esc(g.gametypeLabel)}${g.has_pbp
+      <div>${favStar('game', g.id, `${g.visName} at ${g.homeName}`, niceDate(g.date))
+        }${esc(g.gametypeLabel)}${g.has_pbp
         ? '<span class="pill quiet" title="Retrosheet has a pitch-by-pitch'
           + ' account of this game, below the box score.">'
           + 'play-by-play on file</span>'
@@ -1267,8 +1322,12 @@ async function viewPlayer(parts, q) {
     : `<h3>Game log</h3><p class="empty">No games on file — the game files
        record players, managers and umpires, but not coaches.</p>`;
 
+  // Already a `span` in this scope, for the bio dates.
+  const played = [p.play_debut, p.play_last].filter(Boolean)
+    .map(x => String(x).slice(0, 4));
   app.innerHTML = `
-    <h2>${esc(p.name)}${p.hof ? '<span class="pill alt">HOF</span>' : ''}</h2>
+    <h2>${esc(p.name)}${p.hof ? '<span class="pill alt">HOF</span>' : ''}${
+      favStar('player', id, p.name, played.length ? played.join('–') : '')}</h2>
     <div class="meta-grid">${bio.join('')}</div>
     ${log}
     ${pitcherFirst ? pitching + batting : batting + pitching}
@@ -1601,6 +1660,36 @@ async function viewNotable(_, q) {
   });
 }
 
+// ------------------------------------------------------------- favourites
+
+/* What the reader kept. Two lists, because a player and a game are read for
+   different reasons, and each row goes where its star was pressed. */
+async function viewFavorites() {
+  const list = favRead();
+  const rowsFor = kind => list.filter(f => f.kind === kind).map(f => ({ cells: [
+    kind === 'player' ? playerLink(f.id, f.label)
+      : link('#/game/' + f.id, f.label),
+    esc(f.sub || ''),
+    `<button class="fav on" data-fav="${esc(f.kind)}" data-id="${esc(f.id)}"
+       data-label="${esc(f.label)}" data-sub="${esc(f.sub || '')}"
+       aria-pressed="true" title="Remove from favourites">★</button>`,
+  ] }));
+
+  const players = rowsFor('player'), games = rowsFor('game');
+  app.innerHTML = `
+    <h2>Favorites</h2>
+    <p class="note">Kept in this browser and nowhere else. There is no account
+      and no server behind this site — it is files on GitHub Pages — so a list
+      made here is not the list on another machine, and clearing your browser
+      data clears it.</p>
+    ${list.length ? '' : `<p class="empty">Nothing yet. The star on a player
+      or a box score puts it here.</p>`}
+    ${players.length ? `<h3>People</h3>${table(
+      [{ t: 'Name', l: 1 }, { t: 'Seasons', l: 1 }, { t: '' }], players)}` : ''}
+    ${games.length ? `<h3>Games</h3>${table(
+      [{ t: 'Game', l: 1 }, { t: 'Date', l: 1 }, { t: '' }], games)}` : ''}`;
+}
+
 // ---------------------------------------------------------------- day, park
 
 /* The day view was a second way to read one date -- its own endpoint, its own
@@ -1755,6 +1844,19 @@ async function viewAbout() {
     app.innerHTML = `<p class="empty">Can’t reach the server: ${esc(e.message)}</p>`;
     return;
   }
+  /* Delegated, because every view replaces app.innerHTML and a listener on a
+     star would go with it. The favourites view redraws itself, since removing
+     a row from the list you are looking at should take the row away. */
+  app.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-fav]');
+    if (!b) return;
+    const on = favToggle(b.dataset.fav, b.dataset.id, b.dataset.label, b.dataset.sub);
+    if (parseHash().parts[0] === 'favorites') return route();
+    b.classList.toggle('on', on);
+    b.textContent = on ? '★' : '☆';
+    b.setAttribute('aria-pressed', String(on));
+    b.title = on ? 'Remove from favourites' : 'Keep this in favourites, in this browser';
+  });
   window.addEventListener('hashchange', route);
   route();
 })();

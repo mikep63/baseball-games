@@ -27,6 +27,17 @@ globalThis.document = {
   querySelectorAll: () => [],
 };
 globalThis.window = { scrollTo() {}, addEventListener() {} };
+
+/* Favourites are the one thing the app writes rather than reads, and jsc has
+   no localStorage. This is enough of one to prove the views: a Map, and the
+   same throw-on-nothing behaviour a browser has for a missing key. */
+globalThis.localStorage = {
+  m: new Map(),
+  getItem(k) { return this.m.has(k) ? this.m.get(k) : null; },
+  setItem(k, v) { this.m.set(k, String(v)); },
+  removeItem(k) { this.m.delete(k); },
+  clear() { this.m.clear(); },
+};
 globalThis.location = { hash: '#/games', replace(h) { this.hash = h; } };
 globalThis.encodeURIComponent = globalThis.encodeURIComponent || (s => s);
 
@@ -79,6 +90,7 @@ function loadApp() {
   return new Function(body + '\nreturn {viewGames, viewGame, viewPlayer, viewTeam, ' +
     'viewTeams, viewDay, viewPark, viewSearch, viewAbout, viewNotable, ' +
     'weekdayOf, monthsBetween, dayBucket, gamesHash, describePlay, playsHTML, ' +
+    'viewFavorites, favToggle, favRead, favHas, ' +
     'setMeta: m => { META = m; }};')();
 }
 
@@ -89,6 +101,14 @@ function Q(obj) {
 
 async function main() {
   const V = loadApp();
+
+  /* Render a view and hand back its markup, the way the case loop does. */
+  const render = async run => {
+    ['app', 'gamelog', 'results'].forEach(id => { el(id).innerHTML = ''; });
+    await run();
+    drainMicrotasks();
+    return (elements.app.innerHTML || '') + (elements.gamelog.innerHTML || '');
+  };
   V.setMeta(JSON.parse(readFile(FIX + 'meta.json')));
 
   const cases = [
@@ -305,6 +325,42 @@ async function main() {
       check(label, false, String(e) + (e.stack ? '\n        ' + e.stack.split('\n')[0] : ''));
     }
   }
+
+  /* Favourites, the one thing this app writes. The star is on a player page
+     and on a game page, it survives a redraw, and the list reads back what was
+     put in it -- with the label, so the page draws without fetching 2.3 MB of
+     names to find out who ruthb101 was. */
+  localStorage.clear();
+  check('favourites — nothing is kept to begin with', V.favRead().length === 0);
+  check('favourites — a star on the player page',
+    (await render(() => V.viewPlayer(['ruthb101'], Q({})))).includes('data-fav="player"'));
+  check('favourites — a star on the game page',
+    (await render(() => V.viewGame(['NYA195610080']))).includes('data-fav="game"'));
+
+  V.favToggle('player', 'ruthb101', 'Babe Ruth', '1914–1935');
+  V.favToggle('game', 'NYA195610080', 'Brooklyn Dodgers at New York Yankees',
+              'October 8, 1956');
+  check('favourites — both kinds are kept, newest first',
+    V.favRead().length === 2 && V.favRead()[0].kind === 'game');
+  check('favourites — the label is kept beside the id',
+    V.favRead()[1].label === 'Babe Ruth' && V.favRead()[1].sub === '1914–1935');
+
+  const kept = await render(() => V.viewFavorites());
+  check('favourites — the list shows both, each linking where its star was',
+    kept.includes('Babe Ruth') && kept.includes('href="#/player/ruthb101"')
+      && kept.includes('href="#/game/NYA195610080"'));
+  /* Storage is a browser, not an account: nothing about this list reaches
+     another machine, and the page has to say so rather than let anyone assume
+     their phone will have it. */
+  check('favourites — the page says where the list lives',
+    kept.includes('this browser'));
+
+  check('favourites — pressing the star again takes it off',
+    V.favToggle('player', 'ruthb101', 'Babe Ruth', '') === false
+      && V.favRead().length === 1 && !V.favHas('player', 'ruthb101'));
+  localStorage.clear();
+  check('favourites — an empty list says how to fill it',
+    (await render(() => V.viewFavorites())).includes('The star on a player'));
 
   /* The other half of that: dropping the notice from the view is only right
      while the footer still carries it. Retrosheet asks that it be displayed,

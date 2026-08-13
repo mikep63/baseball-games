@@ -270,3 +270,12 @@ h5 { font-size: .88rem; margin: .55rem 0 .15rem; color: var(--muted); font-weigh
   .play { grid-template-columns: 1fr; gap: .1rem; }
   .play .pbp-raw { justify-self: start; }
 }
+
+/* The star that keeps something in favourites. A button rather than a link:
+   it changes what this browser holds, it does not go anywhere. */
+.fav { background: none; border: 0; cursor: pointer; padding: 0 .35rem;
+       font-size: 1rem; line-height: 1; color: var(--muted); }
+.fav.on { color: #d8a41a; }
+.fav:hover, .fav:focus-visible { color: var(--accent); }
+h2 .fav { font-size: 1.1rem; vertical-align: middle; }
+.gamehead .fav { font-size: 1.1rem; }
