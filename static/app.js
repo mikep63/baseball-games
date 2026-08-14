@@ -1300,8 +1300,16 @@ async function viewPlayer(parts, q) {
      keeps every pitcher who did bat, which before the DH is all of them. */
   const anyPA = d.batting.some(r =>
     (r.ab || 0) + (r.bb || 0) + (r.hbp || 0) + (r.sh || 0) + (r.sf || 0) > 0);
-  const pitcherFirst = (colSum(d.pitching, 'outs') || 0) > 0
-                     && (colSum(d.batting, 'ab') || 0) < 500;
+  /* Which line leads, from games rather than at-bats. A pitcher who spent
+     twenty years in a league with no designated hitter piles up at-bats
+     without ever being a batter, so a cap on them read Walter Johnson's 2,349
+     as a hitting career and put it above 417 wins -- along with Cy Young,
+     Warren Spahn, Pete Alexander and 457 others. Share of games says what a
+     man was there to do: Randy Johnson pitched in 645 of the 646 games he
+     batted in. The ratio the records app already uses. */
+  const pitG = colSum(d.pitching, 'g') || 0;
+  const batG = colSum(d.batting, 'g') || 0;
+  const pitcherFirst = pitG > 0 && (batG === 0 || pitG / batG >= 0.5);
   const batting = (bat && anyPA) ? `<h3>Batting</h3>${bat}` : '';
   const pitching = pit ? `<h3>Pitching</h3>${pit}` : '';
 

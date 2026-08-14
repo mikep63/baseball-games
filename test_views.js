@@ -240,6 +240,20 @@ async function main() {
        11 SHO. */
     ['player — Walter Johnson, decisions', () => V.viewPlayer(['johnw102'], Q({})),
       h => h.includes('Walter Johnson') && h.includes('>417<') && h.includes('>110<')],
+    /* Which line leads. He batted 2,349 times across twenty-one seasons, which
+       a cap on at-bats read as a hitting career and put above 417 wins. What
+       he was there to do is in the share of games: he pitched in 808 of the
+       943 he batted in. */
+    ['player — Walter Johnson leads with his pitching',
+      () => V.viewPlayer(['johnw102'], Q({})),
+      h => h.indexOf('<h3>Pitching</h3>') > -1
+        && h.indexOf('<h3>Pitching</h3>') < h.indexOf('<h3>Batting</h3>')],
+    /* And the other way, on the man who is both: Ruth pitched 163 games and
+       batted in 2,503, so the ratio reads him as the hitter he is remembered
+       as without anyone having to name him. */
+    ['player — Ruth leads with his batting', () => V.viewPlayer(['ruthb101'], Q({})),
+      h => h.indexOf('<h3>Batting</h3>') > -1
+        && h.indexOf('<h3>Batting</h3>') < h.indexOf('<h3>Pitching</h3>')],
     /* 2,709 people in the database never played a game, and their pages used
        to be a name and a birthplace. Lasorda pitched for three seasons and
        managed for twenty-one, so he gets both records and both game logs. */
