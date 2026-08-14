@@ -198,6 +198,17 @@ async function main() {
     ['game — the wind reads as English, not as a Retrosheet code',
       () => V.viewGame(['NYA195610080']),
       h => h.includes('out to left field') && !h.includes('tolf')],
+    /* The ids were in the response all along -- `people` carried the names and
+       `g` the men they belong to -- and the game info printed the names as
+       text while the winning pitcher two lines below was a link. Stengel and
+       Pinelli both have pages, and a name in a game file is the side of the
+       biography disagreement that `roleGap` trusts, so these always land on a
+       record rather than on the note saying there isn't one. */
+    ['game — the managers and umpires reach their pages',
+      () => V.viewGame(['NYA195610080']),
+      h => h.includes('<a href="#/player/stenc101">Casey Stengel</a>')
+        && h.includes('<a href="#/player/alstw101">Walter Alston</a>')
+        && h.includes('HP: <a href="#/player/pineb101">Babe Pinelli</a>')],
     /* Maldonado hit two, in the 7th and the 9th. He is named once with the
        count and both accounts, not twice as though they were separate men --
        and the runners aboard appear at all, which they had never done. */

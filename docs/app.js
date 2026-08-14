@@ -819,9 +819,15 @@ function gameInfoHTML(g, park, p, pitching) {
      to print nothing rather than "out to left field". */
   add('Wind', esc([g.wind_speed != null ? g.wind_speed + ' mph' : '',
                    windDir(g.wind_dir)].filter(Boolean).join(', ')));
-  add('Umpires', UMP_SPOTS.map(([k, spot]) => (p[k] ? `${spot}: ${p[k]}` : null))
-    .filter(Boolean).map(esc).join('. '));
-  add('Managers', esc([p.mgr_vis, p.mgr_home].filter(Boolean).join(' / ')));
+  /* Both now link to the page the man already has. The ids ride in `g` beside
+     the names in `p`, the same pairing the decisions use below, so this costs
+     a helper call and nothing else. Linking from here is safe in the way the
+     bio file is not: a name in a game file is the side `roleGap` trusts, so
+     every one of these resolves to a page with a record under it. */
+  add('Umpires', UMP_SPOTS.filter(([k]) => p[k])
+    .map(([k, spot]) => `${spot}: ${playerLink(g[k], p[k])}`).join('. '));
+  add('Managers', ['mgr_vis', 'mgr_home'].filter(k => p[k])
+    .map(k => playerLink(g[k], p[k])).join(' / '));
 
   // The decisions are pills beside their pitchers. They are named here only
   // when the man has no line to carry one -- 1,744 games where the log records
