@@ -1841,7 +1841,11 @@ async function viewAbout() {
     document.getElementById('subtitle').textContent =
       `${META.games.toLocaleString()} games, ${META.firstSeason}–${META.lastSeason}`;
   } catch (e) {
-    app.innerHTML = `<p class="empty">Can’t reach the server: ${esc(e.message)}</p>`;
+    /* A stale copy of the reader says so in its own words; anything else is
+       the server being unreachable, which is a different problem. */
+    app.innerHTML = e.message.startsWith('This page is out of date')
+      ? `<p class="empty">${esc(e.message)}</p>`
+      : `<p class="empty">Can’t reach the server: ${esc(e.message)}</p>`;
     return;
   }
   /* Delegated, because every view replaces app.innerHTML and a listener on a

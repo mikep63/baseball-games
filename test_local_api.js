@@ -99,6 +99,30 @@ async function main() {
   new Function(src)();
   const API = globalThis.window.LocalAPI;
 
+  /* The guard against a cached reader meeting moved data. Pages fixes
+     Cache-Control at ten minutes, so a browser can hold this file from before
+     a shard moved and read data from after it -- which does not error, it
+     draws an empty page. A player's game log went blank exactly that way. */
+  {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async url => url === 'data/meta.json'
+      ? { ok: true, json: async () => ({ shape: 999, games: 1 }) }
+      : realFetch(url);
+    new Function(readFile('static/api-local.js'))();
+    const stale = globalThis.window.LocalAPI;
+    let said = '';
+    try { await stale.get('/meta'); } catch (e) { said = e.message; }
+    globalThis.fetch = realFetch;
+    new Function(readFile('static/api-local.js'))();   // put the real one back
+    checks++;
+    if (said.startsWith('This page is out of date')) {
+      print('  ok    /meta refuses to draw on a shape it was not written for');
+    } else {
+      failures++;
+      print('  FAIL  a moved export drew anyway — ' + (said || 'no error raised'));
+    }
+  }
+
   // --- meta
   compare('/meta', await API.get('/meta'), fixture('meta'),
     ['firstSeason', 'lastSeason', 'games', 'withBox', 'withPlays']);

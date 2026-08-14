@@ -197,7 +197,26 @@ window.LocalAPI = (function () {
 
   // ------------------------------------------------------------- endpoints
 
-  async function meta() { return load('meta.json'); }
+  /* The shape of the export this file was written for, matching EXPORT_SHAPE
+     in build_site.py. Every view asks for /meta before it draws anything, so
+     this is where a mismatch is caught.
+
+     It is caught at all because Pages fixes Cache-Control at ten minutes and
+     will not let it be changed: a browser can hold this file from before a
+     shard moved and read data from after it. That does not error on its own --
+     it finds no rows and draws an empty page, and a reader cannot tell "no
+     games" from "your copy of the code is stale". A player's game log went
+     blank exactly that way. Refusing to draw is the loud version. */
+  const SHAPE = 1;
+
+  async function meta() {
+    const m = await load('meta.json');
+    if (m.shape !== SHAPE) {
+      throw new Error('This page is out of date — the data moved under it. '
+        + 'Reload to pick up the new one (hold Shift while pressing Reload).');
+    }
+    return m;
+  }
 
   async function search(q) {
     const term = (q.get('q') || '').trim().toLowerCase();

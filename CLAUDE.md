@@ -17,6 +17,13 @@ translation belongs in `api-local.js`, not in the view.
 A change to a query in `app.py` is half a change. The other half is the export,
 and `test_views.sh` is what says so.
 
+**If a change moves data between files, bump `EXPORT_SHAPE` in `build_site.py`
+and `SHAPE` in `api-local.js` together.** GitHub Pages fixes Cache-Control at
+ten minutes and will not let it be changed, so a browser can hold the old
+reader and fetch the new data; that combination does not error, it draws an
+empty page. The two constants are what turn it into "this page is out of
+date — reload".
+
 One thing is not settled by either: the play-by-play is stored in shorthand and
 expanded at the moment of reading, so the English lives only in `describePlay`.
 `spec/plays_english.json` is the contract for it — event in, sentence out, in no

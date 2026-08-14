@@ -53,6 +53,19 @@ CAREERS = os.path.join(DATA, "careers")
 PLAYS = os.path.join(DATA, "plays")
 BOX = os.path.join(DATA, "box")
 
+# The shape of the export, as opposed to the data in it. Bumped whenever a
+# reader written for the old shape would misread the new one: a table moving
+# between files, a column changing name, a shard being re-keyed.
+#
+# It exists because Pages fixes Cache-Control at ten minutes and offers no way
+# to change it, so a browser can hold api-local.js from before a change and
+# read data from after it. That combination does not error -- it finds no rows
+# and draws an empty page, which is the worst answer available. api-local.js
+# carries the shape it was written for and refuses to draw on a mismatch.
+#
+# 1  the season/box split, and `sub` on a play row.
+EXPORT_SHAPE = 1
+
 # Only what a view actually renders. The game page shows batting, pitching and
 # the itemised events; it does not show fielding lines, pinch-running or team
 # totals, and carrying them would roughly double every shard for nothing.
@@ -503,7 +516,8 @@ def export_meta(conn, seasons):
                            if l in LEAGUE_ORDER else 99)
                  for s, v in lg_season.items()}
     path = os.path.join(DATA, "meta.json")
-    write(path, {"firstSeason": m[3], "lastSeason": m[4], "games": m[0],
+    write(path, {"shape": EXPORT_SHAPE,
+                 "firstSeason": m[3], "lastSeason": m[4], "games": m[0],
                  "withBox": m[1], "withPlays": m[2], "seasons": seasons,
                  "seasonTypes": by_season,
                  "gametypes": {"regular": "Regular season",
