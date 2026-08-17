@@ -239,6 +239,13 @@ button.cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset:
 footer { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 2.5rem; color: var(--muted); font-size: .8rem; }
 footer p { margin-bottom: .5rem; }
 
+/* Name, what this build is, who owns it -- the order an About box has used
+   since long before any of this, and the same three lines on every one of
+   these sites. */
+.colophon { line-height: 1.5; margin-bottom: .7rem; }
+.colophon strong { color: var(--ink); font-size: .9rem; }
+
+
 @media (max-width: 600px) {
   main { padding: 1rem .75rem 2rem; }
   header { padding: 1rem 0 0; }

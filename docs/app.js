@@ -1854,6 +1854,14 @@ async function viewAbout() {
     META = await api('/meta');
     document.getElementById('subtitle').textContent =
       `${META.games.toLocaleString()} games, ${META.firstSeason}–${META.lastSeason}`;
+    // The version line of the colophon. No release number to show: the code
+    // changes rarely and the data yearly, so the data is the version, and the
+    // export shape is what a reader would quote in a report.
+    const build = document.getElementById('build-line');
+    if (build) {
+      build.textContent = `Retrosheet data · ${META.games.toLocaleString()} games, `
+        + `${META.firstSeason}–${META.lastSeason} · shape ${META.shape}`;
+    }
   } catch (e) {
     /* A stale copy of the reader says so in its own words; anything else is
        the server being unreachable, which is a different problem. */
