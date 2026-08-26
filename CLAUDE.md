@@ -3,6 +3,10 @@
 Read `README.md` first — it carries the reasoning, and *What the data can and
 can't say* is the part most likely to stop you shipping a wrong number.
 
+`DESIGN.md` holds settled decisions and the alternatives that lost — including
+why this app and `baseball-records` stay separate. Read it before proposing a
+design change, and add to it rather than re-arguing an entry.
+
 ## The rule everything else serves
 
 There is **one frontend over two backings**: `app.py` (Python over SQLite) and
